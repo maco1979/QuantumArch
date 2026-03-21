@@ -1,0 +1,40 @@
+# QuantumArch 类型检查配置
+# pyright 配置文件
+
+{
+    "include": [
+        "quantum_core",
+        "optimization_system",
+        "tests",
+        "benchmark"
+    ],
+    "exclude": [
+        "**/__pycache__",
+        "**/*.pyc",
+        "**/.venv"
+    ],
+    "venvPath": ".",
+    "pythonVersion": "3.10",
+    "typeCheckingMode": "standard",
+    "reportMissingImports": true,
+    "reportMissingTypeStubs": false,
+    "reportUnknownMemberType": true,
+    "reportUnknownVariableType": true,
+    "reportUnknownArgumentType": true,
+    "reportReturnType": true,
+    "reportWildcardImportFromLibrary": false,
+    "reportOptionalSubscript": false,
+    "reportOptionalMemberAccess": false,
+    "strictListConstraint": true,
+    "strictDictionaryConstraint": true,
+    "strictTupleConstraint": true,
+    "enableTypeIgnoreComments": true,
+    "pythonPlatform": "Windows",
+    "executionEnvironments": [
+        {
+            "root": "quantum_core",
+            "pythonVersion": "3.10",
+            "typeCheckingMode": "basic"
+        }
+    ]
+}

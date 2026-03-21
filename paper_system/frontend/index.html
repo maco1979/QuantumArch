@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>论文学习系统 - QuantumArch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* 玻璃态效果 */
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* 滚动条 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1e1e2e; }
+        ::-webkit-scrollbar-thumb { background: #4c4c6d; border-radius: 3px; }
+        
+        /* 加载动画 */
+        .loading { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        /* 卡片悬停 */
+        .paper-card { transition: all 0.3s ease; }
+        .paper-card:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-purple-900 to-slate-900 min-h-screen text-gray-100">
+    
+    <!-- 导航栏 -->
+    <nav class="glass fixed top-0 left-0 right-0 z-50 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                    <span class="text-xl font-bold">Q</span>
+                </div>
+                <span class="text-xl font-semibold">论文学习系统</span>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <button onclick="showTab('papers')" class="px-4 py-2 rounded-lg hover:bg-white/10 transition" id="nav-papers">论文库</button>
+                <button onclick="showTab('crawl')" class="px-4 py-2 rounded-lg hover:bg-white/10 transition" id="nav-crawl">抓取</button>
+                <button onclick="showTab('stats')" class="px-4 py-2 rounded-lg hover:bg-white/10 transition" id="nav-stats">统计</button>
+                <button onclick="showTab('kg')" class="px-4 py-2 rounded-lg hover:bg-white/10 transition" id="nav-kg">知识图谱</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容区 -->
+    <main class="pt-24 px-6 pb-12 max-w-7xl mx-auto">
+        
+        <!-- 统计卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="glass rounded-xl p-6">
+                <div class="text-sm text-gray-400">论文总数</div>
+                <div class="text-3xl font-bold text-purple-400" id="stat-total">0</div>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <div class="text-sm text-gray-400">已下载</div>
+                <div class="text-3xl font-bold text-green-400" id="stat-downloaded">0</div>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <div class="text-sm text-gray-400">已阅读</div>
+                <div class="text-3xl font-bold text-blue-400" id="stat-read">0</div>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <div class="text-sm text-gray-400">分类数</div>
+                <div class="text-3xl font-bold text-pink-400" id="stat-categories">0</div>
+            </div>
+        </div>
+
+        <!-- 论文库标签页 -->
+        <div id="tab-papers" class="tab-content">
+            <!-- 搜索栏 -->
+            <div class="glass rounded-xl p-4 mb-6">
+                <div class="flex gap-4">
+                    <input type="text" id="search-input" placeholder="搜索论文标题、摘要..." 
+                           class="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500">
+                    <select id="category-filter" class="bg-white/5 border border-white/10 rounded-lg px-4 py-2">
+                        <option value="">全部分类</option>
+                        <option value="cs.AI">cs.AI</option>
+                        <option value="cs.LG">cs.LG</option>
+                        <option value="cs.CV">cs.CV</option>
+                        <option value="cs.CL">cs.CL</option>
+                        <option value="cs.NE">cs.NE</option>
+                    </select>
+                    <button onclick="searchPapers()" class="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-lg transition">
+                        搜索
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 论文列表 -->
+            <div id="papers-list" class="grid gap-4">
+                <!-- 论文卡片会动态加载 -->
+            </div>
+            
+            <!-- 加载更多 -->
+            <div class="text-center mt-8">
+                <button onclick="loadMore()" id="load-more" class="hidden bg-white/10 hover:bg-white/20 px-6 py-3 rounded-lg transition">
+                    加载更多
+                </button>
+            </div>
+        </div>
+
+        <!-- 抓取标签页 -->
+        <div id="tab-crawl" class="tab-content hidden">
+            <div class="glass rounded-xl p-8 max-w-2xl mx-auto">
+                <h2 class="text-2xl font-bold mb-6">开始抓取 arXiv 论文</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">选择分类领域</label>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2" id="category-checkboxes">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" value="cs" checked class="rounded">
+                                <span>计算机科学</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" value="physics" class="rounded">
+                                <span>物理学</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" value="math" class="rounded">
+                                <span>数学</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" value="q-bio" class="rounded">
+                                <span>量子生物</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" value="stat" class="rounded">
+                                <span>统计学</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" value="q-fin" class="rounded">
+                                <span>量子金融</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">每类抓取数量</label>
+                        <input type="number" id="max-per-category" value="100" min="10" max="1000"
+                               class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2">
+                    </div>
+                    
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="download-pdfs" class="rounded">
+                        <label for="download-pdfs">同时下载 PDF (会较慢)</label>
+                    </div>
+                    
+                    <button onclick="startCrawl()" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 py-3 rounded-lg font-semibold transition">
+                        开始抓取
+                    </button>
+                </div>
+                
+                <!-- 抓取状态 -->
+                <div id="crawl-status" class="mt-6 hidden">
+                    <div class="flex items-center space-x-2">
+                        <div class="loading w-3 h-3 bg-green-400 rounded-full"></div>
+                        <span>正在抓取中...</span>
+                    </div>
+                    <div class="mt-4 text-sm text-gray-400">
+                        已抓取: <span id="crawl-count">0</span> 篇
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 统计标签页 -->
+        <div id="tab-stats" class="tab-content hidden">
+            <div class="glass rounded-xl p-8">
+                <h2 class="text-2xl font-bold mb-6">论文分类统计</h2>
+                <div id="category-stats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <!-- 分类统计会动态加载 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 知识图谱标签页 -->
+        <div id="tab-kg" class="tab-content hidden">
+            <div class="glass rounded-xl p-8">
+                <h2 class="text-2xl font-bold mb-4">作者知识图谱</h2>
+                <p class="text-gray-400 mb-4">显示论文最多的作者及其研究领域</p>
+                <div id="kg-container" class="min-h-[400px] flex items-center justify-center text-gray-500">
+                    点击加载知识图谱...
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 论文详情模态框 -->
+    <div id="paper-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-start mb-4">
+                    <h2 id="modal-title" class="text-xl font-bold"></h2>
+                    <button onclick="closeModal()" class="text-gray-400 hover:text-white">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="text-sm text-purple-400 mb-4" id="modal-authors"></div>
+                <div class="text-xs text-gray-500 mb-4" id="modal-date"></div>
+                
+                <div class="flex gap-2 mb-4" id="modal-categories"></div>
+                
+                <div class="mb-4">
+                    <h3 class="text-sm font-semibold mb-2">摘要</h3>
+                    <p id="modal-abstract" class="text-sm text-gray-300 leading-relaxed max-h-40 overflow-y-auto"></p>
+                </div>
+                
+                <div class="flex gap-4">
+                    <select id="modal-status" onchange="updatePaperStatus()" class="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm">
+                        <option value="unread">未读</option>
+                        <option value="reading">在读</option>
+                        <option value="completed">已读完</option>
+                    </select>
+                    <input type="text" id="modal-tags" placeholder="添加标签，用逗号分隔" 
+                           class="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm">
+                    <button onclick="savePaperNotes()" class="bg-purple-600 px-4 py-2 rounded-lg text-sm">保存</button>
+                </div>
+                
+                <div class="mt-4 flex gap-4">
+                    <a id="modal-pdf" href="#" target="_blank" class="flex items-center space-x-2 text-purple-400 hover:text-purple-300">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <span>查看 PDF</span>
+                    </a>
+                    <a id="modal-arxiv" href="#" target="_blank" class="flex items-center space-x-2 text-gray-400 hover:text-gray-300">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                        </svg>
+                        <span>arXiv 原文</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局状态
+        let currentPage = 1;
+        let currentPapers = [];
+        let currentPaperId = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatistics();
+            loadPapers();
+        });
+
+        // 标签页切换
+        function showTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            
+            document.querySelectorAll('[id^="nav-"]').forEach(el => el.classList.remove('bg-white/20'));
+            document.getElementById(`nav-${tab}`).classList.add('bg-white/20');
+            
+            if (tab === 'stats') loadCategoryStats();
+            if (tab === 'kg') loadKnowledgeGraph();
+        }
+
+        // 加载统计
+        async function loadStatistics() {
+            try {
+                const res = await fetch('/api/statistics');
+                const data = await res.json();
+                
+                document.getElementById('stat-total').textContent = data.total_papers || 0;
+                document.getElementById('stat-downloaded').textContent = data.downloaded || 0;
+                document.getElementById('stat-read').textContent = data.read_count || 0;
+                document.getElementById('stat-categories').textContent = Object.keys(data.category_counts || {}).length;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // 加载论文列表
+        async function loadPapers(page = 1) {
+            try {
+                const res = await fetch(`/api/papers?page=${page}&page_size=20`);
+                const papers = await res.json();
+                
+                if (page === 1) {
+                    currentPapers = papers;
+                } else {
+                    currentPapers.push(...papers);
+                }
+                
+                renderPapers(currentPapers);
+                
+                if (papers.length === 20) {
+                    document.getElementById('load-more').classList.remove('hidden');
+                } else {
+                    document.getElementById('load-more').classList.add('hidden');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // 渲染论文列表
+        function renderPapers(papers) {
+            const container = document.getElementById('papers-list');
+            
+            if (papers.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-gray-500">
+                        <p>暂无论文，请先抓取</p>
+                        <button onclick="showTab('crawl')" class="mt-4 text-purple-400 hover:text-purple-300">
+                            去抓取论文 →
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = papers.map(paper => `
+                <div class="paper-card glass rounded-xl p-5 cursor-pointer" onclick="openPaper('${paper.arxiv_id}')">
+                    <div class="flex justify-between items-start">
+                        <h3 class="font-semibold text-lg line-clamp-2">${paper.title}</h3>
+                        <span class="px-2 py-1 text-xs rounded ${getStatusColor(paper.read_status)}">
+                            ${getStatusText(paper.read_status)}
+                        </span>
+                    </div>
+                    <p class="text-sm text-gray-400 mt-2 line-clamp-2">${paper.abstract}</p>
+                    <div class="flex items-center justify-between mt-3 text-xs text-gray-500">
+                        <span>${paper.authors.slice(0, 3).join(', ')}${paper.authors.length > 3 ? '...' : ''}</span>
+                        <span>${paper.published_date}</span>
+                    </div>
+                    <div class="flex gap-1 mt-2 flex-wrap">
+                        ${paper.categories.slice(0, 3).map(c => `<span class="px-2 py-0.5 bg-purple-500/20 text-purple-300 rounded text-xs">${c}</span>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getStatusColor(status) {
+            const colors = {
+                'unread': 'bg-gray-500/20 text-gray-400',
+                'reading': 'bg-blue-500/20 text-blue-400',
+                'completed': 'bg-green-500/20 text-green-400'
+            };
+            return colors[status] || colors['unread'];
+        }
+
+        function getStatusText(status) {
+            const texts = {
+                'unread': '未读',
+                'reading': '在读',
+                'completed': '已读完'
+            };
+            return texts[status] || '未读';
+        }
+
+        // 搜索
+        async function searchPapers() {
+            const query = document.getElementById('search-input').value;
+            const category = document.getElementById('category-filter').value;
+            
+            let url = '/api/papers?page=1&page_size=50';
+            if (query) url += `&search=${encodeURIComponent(query)}`;
+            if (category) url += `&category=${encodeURIComponent(category)}`;
+            
+            const res = await fetch(url);
+            const papers = await res.json();
+            
+            currentPapers = papers;
+            renderPapers(papers);
+        }
+
+        // 加载更多
+        function loadMore() {
+            currentPage++;
+            loadPapers(currentPage);
+        }
+
+        // 打开论文详情
+        async function openPaper(arxivId) {
+            currentPaperId = arxivId;
+            
+            const res = await fetch(`/api/papers/${arxivId}`);
+            const paper = await res.json();
+            
+            document.getElementById('modal-title').textContent = paper.title;
+            document.getElementById('modal-authors').textContent = paper.authors.join(', ');
+            document.getElementById('modal-date').textContent = `发布于 ${paper.published_date} | 更新于 ${paper.updated_date}`;
+            document.getElementById('modal-abstract').textContent = paper.abstract;
+            
+            document.getElementById('modal-categories').innerHTML = paper.categories
+                .map(c => `<span class="px-2 py-1 bg-purple-500/20 text-purple-300 rounded text-xs">${c}</span>`)
+                .join('');
+            
+            document.getElementById('modal-status').value = paper.read_status || 'unread';
+            document.getElementById('modal-tags').value = (paper.tags || []).join(', ');
+            
+            document.getElementById('modal-pdf').href = paper.pdf_url;
+            document.getElementById('modal-arxiv').href = `https://arxiv.org/abs/${arxivId}`;
+            
+            document.getElementById('paper-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('paper-modal').classList.add('hidden');
+        }
+
+        // 更新论文状态
+        async function updatePaperStatus() {
+            const status = document.getElementById('modal-status').value;
+            
+            await fetch(`/api/papers/${currentPaperId}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({read_status: status})
+            });
+            
+            loadPapers();
+        }
+
+        // 保存笔记
+        async function savePaperNotes() {
+            const tags = document.getElementById('modal-tags').value
+                .split(',')
+                .map(t => t.trim())
+                .filter(t => t);
+            
+            await fetch(`/api/papers/${currentPaperId}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({tags})
+            });
+            
+            alert('保存成功！');
+        }
+
+        // 开始抓取
+        async function startCrawl() {
+            const categories = Array.from(document.querySelectorAll('#category-checkboxes input:checked'))
+                .map(cb => cb.value);
+            
+            const maxPerCategory = parseInt(document.getElementById('max-per-category').value);
+            const downloadPdfs = document.getElementById('download-pdfs').checked;
+            
+            document.getElementById('crawl-status').classList.remove('hidden');
+            
+            const res = await fetch('/api/crawl', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    categories,
+                    max_per_category: maxPerCategory,
+                    download_pdfs: downloadPdfs
+                })
+            });
+            
+            // 轮询状态
+            const interval = setInterval(async () => {
+                const statRes = await fetch('/api/crawl/status');
+                const stats = await statRes.json();
+                
+                document.getElementById('crawl-count').textContent = stats.total_papers;
+                
+                if (stats.total_papers > 0) {
+                    loadStatistics();
+                    loadPapers();
+                }
+            }, 5000);
+            
+            // 5分钟后停止轮询
+            setTimeout(() => clearInterval(interval), 300000);
+        }
+
+        // 加载分类统计
+        async function loadCategoryStats() {
+            const res = await fetch('/api/crawl/status');
+            const stats = await res.json();
+            
+            const container = document.getElementById('category-stats');
+            const counts = stats.category_counts || {};
+            
+            const sorted = Object.entries(counts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 20);
+            
+            container.innerHTML = sorted.map(([cat, count]) => `
+                <div class="glass rounded-lg p-4">
+                    <div class="text-xs text-gray-400">${cat}</div>
+                    <div class="text-2xl font-bold">${count}</div>
+                </div>
+            `).join('');
+        }
+
+        // 加载知识图谱
+        async function loadKnowledgeGraph() {
+            const container = document.getElementById('kg-container');
+            container.innerHTML = '<div class="loading">加载中...</div>';
+            
+            try {
+                const res = await fetch('/api/knowledge-graph');
+                const data = await res.json();
+                
+                if (data.nodes.length === 0) {
+                    container.innerHTML = '<p>暂无数据，请先抓取论文</p>';
+                    return;
+                }
+                
+                // 简单的列表展示
+                container.innerHTML = `
+                    <div class="w-full">
+                        <p class="text-sm text-gray-400 mb-4">共 ${data.total_authors} 位作者</p>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            ${data.nodes.slice(0, 20).map(n => `
+                                <div class="glass rounded-lg p-3">
+                                    <div class="font-medium text-sm truncate">${n.name}</div>
+                                    <div class="text-xs text-gray-400">${n.paper_count} 篇论文</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = '<p>加载失败</p>';
+            }
+        }
+    </script>
+</body>
+</html>

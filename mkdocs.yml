@@ -1,0 +1,108 @@
+# QuantumArch 文档配置
+
+site_name: "量子架构 (QuantumArch)"
+site_description: "受量子力学启发的神经网络架构"
+site_author: "QuantumArch Team"
+site_url: "https://quantumarch.github.io/"
+
+repo_name: "quantumarch/quantumarch"
+repo_url: "https://github.com/quantumarch/quantumarch"
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      primary: indigo
+      accent: blue
+    - media: "(prefers-color-scheme: dark)"
+      primary: deep purple
+      accent: light blue
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - search.highlight
+    - search.share
+
+plugins:
+  - search:
+      separator: '[\s\-\.]+'
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            show_category_heading: true
+            members_order: source
+  - autorefs
+  - roamlinks
+  - mermaid2
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - meta
+  - md_in_html
+  - tables
+  - fenced_code
+  - codehilite:
+      css_class: highlight
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang: python
+      use_pygments: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+nav:
+  - Home: index.md
+  - Core Concepts:
+      - Overview: core/overview.md
+      - QSA: core/qsa.md
+      - QEL: core/qel.md
+      - QCI: core/qci.md
+      - CR: core/cr.md
+  - Architecture:
+      - Design: architecture/design.md
+      - Module Structure: architecture/modules.md
+  - API Reference: api/overview.md
+  - Examples: examples/index.md
+  - Benchmark: benchmark.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/quantumarch/quantumarch
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/quantumarch/
+  analytics:
+    provider: google
+    property: UA-XXXXX-Y
+
+copyright: |
+  &copy; 2024-2026 QuantumArch Team.

@@ -1,0 +1,2019 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>量子架构 QuantumArch — 交互式架构可视化</title>
+<style>
+  :root {
+    --bg: #0a0a1a;
+    --bg2: #0f0f2a;
+    --card: rgba(15, 15, 50, 0.85);
+    --border: rgba(100, 140, 255, 0.15);
+    --accent: #6366f1;
+    --accent2: #8b5cf6;
+    --glow: rgba(99, 102, 241, 0.4);
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --quantum-cyan: #22d3ee;
+    --quantum-pink: #f472b6;
+    --quantum-green: #34d399;
+    --quantum-amber: #fbbf24;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  /* 背景量子场 */
+  .quantum-field {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .quantum-field canvas { width: 100%; height: 100%; }
+
+  /* 导航 */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(10, 10, 26, 0.9);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    height: 60px;
+  }
+
+  nav .logo {
+    font-size: 1.2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--quantum-cyan), var(--quantum-pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-right: 2rem;
+  }
+
+  nav .nav-links {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  nav .nav-links a {
+    color: var(--text2);
+    text-decoration: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    transition: all 0.3s;
+  }
+
+  nav .nav-links a:hover, nav .nav-links a.active {
+    color: var(--text);
+    background: rgba(99, 102, 241, 0.15);
+  }
+
+  /* 主内容 */
+  main {
+    position: relative;
+    z-index: 1;
+    padding-top: 60px;
+  }
+
+  section {
+    padding: 4rem 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 8rem 2rem 6rem;
+    position: relative;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+  }
+
+  .hero h1 .gradient-text {
+    background: linear-gradient(135deg, var(--quantum-cyan), var(--accent2), var(--quantum-pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block;
+  }
+
+  .hero .subtitle {
+    font-size: 1.25rem;
+    color: var(--text2);
+    max-width: 700px;
+    margin: 0 auto 3rem;
+  }
+
+  .hero .version-badge {
+    display: inline-block;
+    padding: 0.3rem 1rem;
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin-bottom: 1.5rem;
+  }
+
+  /* 统计数字 */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin: 4rem 0;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    text-align: center;
+    backdrop-filter: blur(10px);
+    transition: all 0.4s;
+  }
+
+  .stat-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 30px var(--glow);
+    transform: translateY(-4px);
+  }
+
+  .stat-card .number {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--quantum-cyan), var(--quantum-pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .stat-card .label {
+    color: var(--text2);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+  }
+
+  /* 区块标题 */
+  .section-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .section-header h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .section-header p {
+    color: var(--text2);
+    font-size: 1.05rem;
+  }
+
+  /* 核心机制卡片 */
+  .mechanism-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .mech-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    backdrop-filter: blur(10px);
+    transition: all 0.4s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mech-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 3px;
+    background: linear-gradient(90deg, var(--quantum-cyan), var(--quantum-pink));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .mech-card:hover::before { opacity: 1; }
+
+  .mech-card:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px);
+  }
+
+  .mech-card .mech-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .mech-card h3 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+  }
+
+  .mech-card .mech-abbr {
+    color: var(--accent2);
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+  }
+
+  .mech-card p {
+    color: var(--text2);
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  .mech-card .mech-formula {
+    margin-top: 1rem;
+    padding: 0.8rem;
+    background: rgba(99, 102, 241, 0.08);
+    border-radius: 8px;
+    font-family: 'Cambria Math', 'Times New Roman', serif;
+    font-size: 0.95rem;
+    color: var(--quantum-cyan);
+    text-align: center;
+    border: 1px solid rgba(99, 102, 241, 0.1);
+  }
+
+  /* 架构流程图 */
+  .arch-flow {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3rem;
+    margin: 2rem 0;
+    overflow-x: auto;
+  }
+
+  .flow-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    min-width: 500px;
+  }
+
+  .flow-block {
+    padding: 1rem 2rem;
+    border-radius: 12px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.95rem;
+    position: relative;
+    min-width: 280px;
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+
+  .flow-block:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 30px var(--glow);
+  }
+
+  .flow-block.input {
+    background: linear-gradient(135deg, #1e3a5f, #1a2744);
+    border: 1px solid rgba(34, 211, 238, 0.3);
+    color: var(--quantum-cyan);
+  }
+
+  .flow-block.quantum {
+    background: linear-gradient(135deg, #2d1b69, #1a1040);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: var(--accent2);
+  }
+
+  .flow-block.core {
+    background: linear-gradient(135deg, #3b1a45, #1f0f28);
+    border: 1px solid rgba(244, 114, 182, 0.3);
+    color: var(--quantum-pink);
+    min-width: 400px;
+  }
+
+  .flow-block.output {
+    background: linear-gradient(135deg, #1a3a2a, #0f2519);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    color: var(--quantum-green);
+  }
+
+  .flow-arrow {
+    width: 2px;
+    height: 30px;
+    background: linear-gradient(to bottom, var(--accent), transparent);
+    position: relative;
+  }
+
+  .flow-arrow::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: -3px;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--accent);
+    border-bottom: 2px solid var(--accent);
+    transform: rotate(45deg);
+  }
+
+  .flow-loop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem;
+    border: 2px dashed rgba(139, 92, 246, 0.3);
+    border-radius: 16px;
+    margin: 1rem 0;
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+  }
+
+  .flow-loop .loop-label {
+    position: absolute;
+    top: -12px;
+    left: 20px;
+    background: var(--bg2);
+    padding: 0 0.8rem;
+    font-size: 0.8rem;
+    color: var(--accent2);
+    font-weight: 600;
+  }
+
+  .flow-sub-blocks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    justify-content: center;
+    margin-top: 1rem;
+  }
+
+  .flow-sub {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    color: var(--accent2);
+    transition: all 0.3s;
+  }
+
+  .flow-sub:hover {
+    background: rgba(139, 92, 246, 0.25);
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.2);
+  }
+
+  /* 对比表格 */
+  .comparison-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 2rem 0;
+    background: var(--card);
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .comparison-table th {
+    padding: 1rem 1.5rem;
+    font-weight: 700;
+    text-align: left;
+    background: rgba(99, 102, 241, 0.1);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+
+  .comparison-table th:first-child { color: var(--text2); }
+  .comparison-table th:nth-child(2) { color: var(--text2); }
+  .comparison-table th:nth-child(3) { color: var(--quantum-cyan); }
+
+  .comparison-table td {
+    padding: 0.8rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.88rem;
+    transition: background 0.2s;
+  }
+
+  .comparison-table tr:hover td {
+    background: rgba(99, 102, 241, 0.05);
+  }
+
+  .comparison-table td:first-child {
+    color: var(--text2);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .comparison-table td:nth-child(2) { color: var(--text2); }
+  .comparison-table td:nth-child(3) { color: var(--text); }
+
+  .highlight { color: var(--quantum-green); font-weight: 600; }
+  .warning { color: var(--quantum-amber); }
+
+  /* 干涉动画 */
+  .interference-demo {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2rem;
+    margin: 2rem 0;
+    text-align: center;
+  }
+
+  .interference-demo h3 {
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+  }
+
+  .interference-canvas {
+    width: 100%;
+    max-width: 800px;
+    height: 300px;
+    border-radius: 12px;
+    background: #050510;
+    border: 1px solid var(--border);
+  }
+
+  .demo-controls {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .demo-btn {
+    padding: 0.5rem 1.2rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.3s;
+  }
+
+  .demo-btn:hover {
+    background: rgba(99, 102, 241, 0.25);
+    border-color: var(--accent);
+  }
+
+  .demo-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  /* 量子态可视化 */
+  .state-viz {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin: 2rem 0;
+  }
+
+  @media (max-width: 768px) {
+    .state-viz { grid-template-columns: 1fr; }
+    .mechanism-grid { grid-template-columns: 1fr; }
+  }
+
+  .state-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+  }
+
+  .state-panel h4 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--quantum-cyan);
+  }
+
+  /* 复杂度图表 */
+  .complexity-chart {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2rem;
+    margin: 2rem 0;
+  }
+
+  .complexity-canvas {
+    width: 100%;
+    height: 350px;
+    border-radius: 12px;
+    background: #050510;
+    border: 1px solid var(--border);
+  }
+
+  /* 训练流程 */
+  .training-phases {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin: 2rem 0;
+  }
+
+  @media (max-width: 768px) {
+    .training-phases { grid-template-columns: 1fr; }
+  }
+
+  .phase-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .phase-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px;
+    height: 100%;
+  }
+
+  .phase-card:nth-child(1)::before { background: var(--quantum-cyan); }
+  .phase-card:nth-child(2)::before { background: var(--accent2); }
+  .phase-card:nth-child(3)::before { background: var(--quantum-pink); }
+
+  .phase-card .phase-num {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.5rem;
+  }
+
+  .phase-card:nth-child(1) .phase-num { color: var(--quantum-cyan); }
+  .phase-card:nth-child(2) .phase-num { color: var(--accent2); }
+  .phase-card:nth-child(3) .phase-num { color: var(--quantum-pink); }
+
+  .phase-card h4 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .phase-card .phase-range {
+    font-size: 0.8rem;
+    color: var(--text2);
+    margin-bottom: 1rem;
+  }
+
+  .phase-card ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .phase-card li {
+    font-size: 0.85rem;
+    color: var(--text2);
+    padding: 0.3rem 0;
+    padding-left: 1.2rem;
+    position: relative;
+  }
+
+  .phase-card li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+  }
+
+  /* Bloch球 */
+  .bloch-container {
+    text-align: center;
+    margin: 2rem 0;
+  }
+
+  .bloch-canvas {
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(15,15,50,0.9), #050510);
+    border: 2px solid var(--border);
+  }
+
+  /* 路线图 */
+  .roadmap {
+    position: relative;
+    padding-left: 3rem;
+    margin: 2rem 0;
+  }
+
+  .roadmap::before {
+    content: '';
+    position: absolute;
+    left: 12px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--quantum-cyan), var(--accent2), var(--quantum-pink), var(--quantum-green));
+  }
+
+  .roadmap-item {
+    position: relative;
+    margin-bottom: 2rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s;
+  }
+
+  .roadmap-item:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .roadmap-item::before {
+    content: '';
+    position: absolute;
+    left: -2.15rem;
+    top: 1.8rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+  }
+
+  .roadmap-item:nth-child(1)::before { background: var(--quantum-cyan); }
+  .roadmap-item:nth-child(2)::before { background: var(--accent2); }
+  .roadmap-item:nth-child(3)::before { background: var(--quantum-pink); }
+  .roadmap-item:nth-child(4)::before { background: var(--quantum-green); }
+
+  .roadmap-item .rm-phase {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.3rem;
+  }
+
+  .roadmap-item h4 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+  .roadmap-item p { color: var(--text2); font-size: 0.9rem; }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 4rem 2rem;
+    border-top: 1px solid var(--border);
+    color: var(--text2);
+    font-size: 0.85rem;
+  }
+
+  footer .footer-quote {
+    font-style: italic;
+    color: var(--accent2);
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+  }
+
+  /* 动画 */
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px var(--glow); }
+    50% { box-shadow: 0 0 40px var(--glow), 0 0 60px rgba(139, 92, 246, 0.2); }
+  }
+
+  .float { animation: float 6s ease-in-out infinite; }
+  .pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-in {
+    opacity: 0;
+    animation: fadeInUp 0.8s ease forwards;
+  }
+
+  /* 滚动条 */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- 背景量子场 -->
+<div class="quantum-field">
+  <canvas id="bgCanvas"></canvas>
+</div>
+
+<!-- 导航 -->
+<nav>
+  <div class="logo">⚛ QuantumArch</div>
+  <div class="nav-links">
+    <a href="#overview" class="active" onclick="navTo(event, 'overview')">概述</a>
+    <a href="#mechanisms" onclick="navTo(event, 'mechanisms')">核心机制</a>
+    <a href="#architecture" onclick="navTo(event, 'architecture')">架构设计</a>
+    <a href="#interference" onclick="navTo(event, 'interference')">干涉演示</a>
+    <a href="#comparison" onclick="navTo(event, 'comparison')">对比分析</a>
+    <a href="#domains" onclick="navTo(event, 'domains')">多领域扩展</a>
+    <a href="#roadmap" onclick="navTo(event, 'roadmap')">路线图</a>
+  </div>
+</nav>
+
+<main>
+  <!-- Hero -->
+  <section class="hero" id="overview">
+    <div class="version-badge">QuantumArch v1.1 | 2026.03</div>
+    <h1>
+      <span class="gradient-text">量子架构</span><br>
+      下一代AI计算范式
+    </h1>
+    <p class="subtitle">
+      受量子力学启发的神经网络架构——将叠加、纠缠、干涉、坍缩<br>
+      系统性融入计算、表示与学习的每个环节
+    </p>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="number">O(n log n)</div>
+        <div class="label">注意力复杂度（vs O(n²)）</div>
+      </div>
+      <div class="stat-card">
+        <div class="number">2×</div>
+        <div class="label">信息密度（复数 vs 实数）</div>
+      </div>
+      <div class="stat-card">
+        <div class="number">∞</div>
+        <div class="label">梯度流稳定（酉性守恒）</div>
+      </div>
+      <div class="stat-card">
+        <div class="number">3-10×</div>
+        <div class="label">自适应推理加速</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 核心机制 -->
+  <section id="mechanisms">
+    <div class="section-header">
+      <h2>七大核心机制</h2>
+      <p>从量子力学中汲取灵感，重新定义神经网络的每个组件</p>
+    </div>
+
+    <div class="mechanism-grid">
+      <div class="mech-card" onclick="showMechDetail('qsa')">
+        <div class="mech-icon" style="background: rgba(34,211,238,0.15);">〰️</div>
+        <h3>量子叠加注意力</h3>
+        <div class="mech-abbr">QSA — Quantum Superposition Attention</div>
+        <p>用复数振幅干涉替代点积+Softmax，通过Born法则计算概率分布，干涉路由实现O(n log n)筛选。</p>
+        <div class="mech-formula">|ψ_attn⟩ = Σᵢ αᵢ · U_qᵢ |xᵢ⟩, αᵢ = ⟨φ_q|xᵢ⟩</div>
+      </div>
+
+      <div class="mech-card" onclick="showMechDetail('qel')">
+        <div class="mech-icon" style="background: rgba(139,92,246,0.15);">🔗</div>
+        <h3>量子纠缠层</h3>
+        <div class="mech-abbr">QEL — Quantum Entanglement Layer</div>
+        <p>用张量积纠缠替代残差连接，局部纠缠门+全局QFT建立token间深层关联，自适应纠缠强度。</p>
+        <div class="mech-formula">|ψ⟩ = U_ent(θ)(|a⟩ ⊗ |b⟩), U_ent ∈ U(4)</div>
+      </div>
+
+      <div class="mech-card" onclick="showMechDetail('qci')">
+        <div class="mech-icon" style="background: rgba(244,114,182,0.15);">🎯</div>
+        <h3>量子坍缩推理</h3>
+        <div class="mech-abbr">QCI — Quantum Collapse Inference</div>
+        <p>利用波函数坍缩实现概率性自适应推理：高确定性token快速退出，低确定性token深入计算。</p>
+        <div class="mech-formula">P(m) = ⟨ψ|M_m†M_m|ψ⟩, H = -Σ pᵢ log pᵢ</div>
+      </div>
+
+      <div class="mech-card" onclick="showMechDetail('qir')">
+        <div class="mech-icon" style="background: rgba(251,191,36,0.15);">⚡</div>
+        <h3>量子干涉路由</h3>
+        <div class="mech-abbr">QIR — Quantum Interference Routing</div>
+        <p>利用波函数干涉的相长/相消效应，高效筛选相关token，将O(n²)注意力降至O(n log n)。</p>
+        <div class="mech-formula">ψ_routed = Σⱼ e^{iφⱼ} βⱼ |ψⱼ⟩</div>
+      </div>
+
+      <div class="mech-card" onclick="showMechDetail('qgd')">
+        <div class="mech-icon" style="background: rgba(52,211,153,0.15);">🔄</div>
+        <h3>量子梯度下降</h3>
+        <div class="mech-abbr">QGD — Quantum Gradient Descent</div>
+        <p>在复数希尔伯特空间中优化，使用Wirtinger导数，分离模长和相位梯度，Cayley变换保持酉性。</p>
+        <div class="mech-formula">θ ← θ·e^{-iη·∂L/∂φ}, |θ| ← |θ|·(1-η·∂L/∂|θ|)</div>
+      </div>
+
+      <div class="mech-card" onclick="showMechDetail('cr')">
+        <div class="mech-icon" style="background: rgba(99,102,241,0.15);">🔮</div>
+        <h3>复数酉表示</h3>
+        <div class="mech-abbr">CR — Complex Unitary Representation</div>
+        <p>所有核心权重为复数酉矩阵，相位编码额外信息维度，酉性约束确保梯度范数守恒。</p>
+        <div class="mech-formula">W ∈ U(d): W†W = I, W = Cayley(Ω)</div>
+      </div>
+
+      <div class="mech-card" onclick="showMechDetail('up')">
+        <div class="mech-icon" style="background: rgba(239,68,68,0.15);">📊</div>
+        <h3>不确定性传播</h3>
+        <div class="mech-abbr">UP — Uncertainty Propagation</div>
+        <p>冯·诺依曼熵度量每层不确定性，动态坍缩阈值控制计算深度，天然提供置信度量化。</p>
+        <div class="mech-formula">S(ρ) = -Tr(ρ log ρ), U_{l+1} = U_l + ΔU</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 架构设计 -->
+  <section id="architecture">
+    <div class="section-header">
+      <h2>架构流程</h2>
+      <p>从输入到输出的完整量子计算路径</p>
+    </div>
+
+    <div class="arch-flow">
+      <div class="flow-container">
+        <div class="flow-block input">📥 输入序列 X = [x₁, x₂, ..., xₙ]</div>
+        <div class="flow-arrow"></div>
+        <div class="flow-block quantum">🔮 量子嵌入层 (QEL) — xᵢ → |xᵢ⟩ ∈ ℂᵈ</div>
+        <div class="flow-arrow"></div>
+        <div class="flow-block quantum">🌀 量子位置编码 (QPE) — 酉旋转</div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-loop">
+          <span class="loop-label">⟳ 重复 L 层</span>
+          <div class="flow-block core" style="margin-bottom: 1rem;">⚛️ 量子块 (Quantum Block)</div>
+          <div class="flow-sub-blocks">
+            <div class="flow-sub">Pre-Norm (复数归一化)</div>
+            <div class="flow-sub">QSA (叠加注意力)</div>
+            <div class="flow-sub">QEL (纠缠层)</div>
+            <div class="flow-sub">FFN_Q (复数MLP)</div>
+            <div class="flow-sub">Collapse? (不确定性检查)</div>
+          </div>
+        </div>
+
+        <div class="flow-arrow"></div>
+        <div class="flow-block core">🎯 全局坍缩 — 量子态 → 确定性输出 (POVM测量)</div>
+        <div class="flow-arrow"></div>
+        <div class="flow-block output">📤 输出 Y</div>
+      </div>
+    </div>
+
+    <!-- 三层架构 -->
+    <div class="section-header" style="margin-top: 3rem;">
+      <h2>三层系统架构</h2>
+      <p>应用层 · 量子核心层 · 执行层</p>
+    </div>
+
+    <div class="state-viz">
+      <div class="state-panel">
+        <h4>应用层 Application Layer</h4>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:1rem;">
+          <span style="padding:0.4rem 0.8rem; background:rgba(34,211,238,0.1); border:1px solid rgba(34,211,238,0.2); border-radius:8px; font-size:0.85rem;">语言模型</span>
+          <span style="padding:0.4rem 0.8rem; background:rgba(139,92,246,0.1); border:1px solid rgba(139,92,246,0.2); border-radius:8px; font-size:0.85rem;">图像理解</span>
+          <span style="padding:0.4rem 0.8rem; background:rgba(244,114,182,0.1); border:1px solid rgba(244,114,182,0.2); border-radius:8px; font-size:0.85rem;">多模态融合</span>
+          <span style="padding:0.4rem 0.8rem; background:rgba(251,191,36,0.1); border:1px solid rgba(251,191,36,0.2); border-radius:8px; font-size:0.85rem;">科学计算</span>
+          <span style="padding:0.4rem 0.8rem; background:rgba(52,211,153,0.1); border:1px solid rgba(52,211,153,0.2); border-radius:8px; font-size:0.85rem;">代码生成</span>
+        </div>
+      </div>
+      <div class="state-panel">
+        <h4>量子核心层 Quantum Core</h4>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-top:1rem;">
+          <span style="padding:0.4rem; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.15); border-radius:8px; font-size:0.8rem; text-align:center;">QSA</span>
+          <span style="padding:0.4rem; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.15); border-radius:8px; font-size:0.8rem; text-align:center;">QEL</span>
+          <span style="padding:0.4rem; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.15); border-radius:8px; font-size:0.8rem; text-align:center;">QCI</span>
+          <span style="padding:0.4rem; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.15); border-radius:8px; font-size:0.8rem; text-align:center;">QIR</span>
+          <span style="padding:0.4rem; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.15); border-radius:8px; font-size:0.8rem; text-align:center;">QGD</span>
+          <span style="padding:0.4rem; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.15); border-radius:8px; font-size:0.8rem; text-align:center;">CR</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 干涉演示 -->
+  <section id="interference">
+    <div class="section-header">
+      <h2>量子干涉演示</h2>
+      <p>观察波函数如何通过干涉筛选相关信息、抑制噪声</p>
+    </div>
+
+    <div class="interference-demo">
+      <h3>🌊 量子干涉路由可视化</h3>
+      <canvas id="interferenceCanvas" class="interference-canvas"></canvas>
+      <div class="demo-controls">
+        <button class="demo-btn active" onclick="setDemoMode('constructive')">相长干涉</button>
+        <button class="demo-btn" onclick="setDemoMode('destructive')">相消干涉</button>
+        <button class="demo-btn" onclick="setDemoMode('mixed')">混合干涉</button>
+        <button class="demo-btn" onclick="setDemoMode('routing')">路由筛选</button>
+      </div>
+    </div>
+
+    <!-- 复杂度对比图 -->
+    <div class="complexity-chart">
+      <h3 style="margin-bottom:1rem;">📈 计算复杂度对比：序列长度 vs 计算量</h3>
+      <canvas id="complexityCanvas" class="complexity-canvas"></canvas>
+    </div>
+  </section>
+
+  <!-- 对比分析 -->
+  <section id="comparison">
+    <div class="section-header">
+      <h2>与 Transformer 对比</h2>
+      <p>每个维度的逐一比较</p>
+    </div>
+
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th>Transformer</th>
+          <th>量子架构</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>注意力复杂度</td>
+          <td>O(n²·d)</td>
+          <td class="highlight">O(n·d·log n)</td>
+        </tr>
+        <tr>
+          <td>参数空间</td>
+          <td>实数 ℝ</td>
+          <td class="highlight">复数 ℂ + 酉约束</td>
+        </tr>
+        <tr>
+          <td>信息维度</td>
+          <td>一维（模长）</td>
+          <td class="highlight">二维（模长 + 相位）</td>
+        </tr>
+        <tr>
+          <td>梯度流</td>
+          <td class="warning">可能消失/爆炸</td>
+          <td class="highlight">酉性守恒，范数有界</td>
+        </tr>
+        <tr>
+          <td>层间连接</td>
+          <td>残差加法</td>
+          <td class="highlight">张量积纠缠</td>
+        </tr>
+        <tr>
+          <td>推理方式</td>
+          <td>确定性固定路径</td>
+          <td class="highlight">概率性自适应路径</td>
+        </tr>
+        <tr>
+          <td>不确定性</td>
+          <td class="warning">外部方法</td>
+          <td class="highlight">冯·诺依曼熵内建</td>
+        </tr>
+        <tr>
+          <td>长上下文</td>
+          <td class="warning">O(n²) 瓶颈</td>
+          <td class="highlight">O(n) 可行</td>
+        </tr>
+        <tr>
+          <td>激活函数</td>
+          <td>ReLU / GELU</td>
+          <td class="highlight">ModReLU（复数）</td>
+        </tr>
+        <tr>
+          <td>归一化</td>
+          <td>LayerNorm（需学习参数）</td>
+          <td class="highlight">量子态天然归一化</td>
+        </tr>
+        <tr>
+          <td>输出多样性</td>
+          <td>temperature + top-p 启发式</td>
+          <td class="highlight">Born法则物理保证</td>
+        </tr>
+        <tr>
+          <td>1M token显存</td>
+          <td class="warning">~4TB（注意力矩阵）</td>
+          <td class="highlight">~500MB（稀疏）</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 训练策略 -->
+  <section id="training">
+    <div class="section-header">
+      <h2>训练策略</h2>
+      <p>三阶段渐进式训练，从模长预热到干涉激活</p>
+    </div>
+
+    <div class="training-phases">
+      <div class="phase-card">
+        <div class="phase-num">Phase 1</div>
+        <h4>模长预热</h4>
+        <div class="phase-range">Epoch 1-5</div>
+        <ul>
+          <li>冻结相位参数</li>
+          <li>仅训练模长 |W|</li>
+          <li>标准Adam优化器</li>
+          <li>学习率warmup</li>
+        </ul>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num">Phase 2</div>
+        <h4>量子微调</h4>
+        <div class="phase-range">Epoch 6-50</div>
+        <ul>
+          <li>解冻所有复数参数</li>
+          <li>切换到QGD优化器</li>
+          <li>Cayley变换保持酉性</li>
+          <li>模长+相位联合优化</li>
+        </ul>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num">Phase 3</div>
+        <h4>干涉激活</h4>
+        <div class="phase-range">Epoch 51-100</div>
+        <ul>
+          <li>激活干涉路由相位</li>
+          <li>坍缩阈值自动调节</li>
+          <li>渐进自适应推理</li>
+          <li>最终精度优化</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 多领域扩展 -->
+  <section id="domains">
+    <div class="section-header">
+      <h2>多领域纠缠扩展</h2>
+      <p>量子纠缠天然适配多领域知识建模——纠缠度精确量化领域间知识共享</p>
+    </div>
+
+    <!-- 领域纠缠图可视化 -->
+    <div class="interference-demo" style="padding:1.5rem;">
+      <h3 style="margin-bottom:0.8rem;">🔗 领域纠缠图 — Domain Entanglement Graph</h3>
+      <canvas id="domainGraphCanvas" style="width:100%;height:420px;border-radius:12px;background:#050510;border:1px solid rgba(100,140,255,0.15);"></canvas>
+      <div class="demo-controls">
+        <button class="demo-btn active" onclick="setGraphMode('entanglement')">纠缠图</button>
+        <button class="demo-btn" onclick="setGraphMode('routing')">路由演示</button>
+        <button class="demo-btn" onclick="setGraphMode('conflict')">冲突检测</button>
+      </div>
+    </div>
+
+    <!-- 多领域模块概览 -->
+    <div class="mechanism-grid" style="margin-top:2rem;">
+      <div class="mech-card">
+        <div class="mech-icon" style="background: rgba(34,211,238,0.15);">🌍</div>
+        <h3>领域量子态编码器</h3>
+        <div class="mech-abbr">DQSE — Domain Quantum State Encoder</div>
+        <p>每个领域编码为归一化量子态 |D_m⟩，支持数据驱动初始化和层次结构递归嵌入。</p>
+        <div class="mech-formula">|D_m⟩ = Σₖ γₘₖ |δₖ⟩, Σₖ|γₘₖ|² = 1</div>
+      </div>
+
+      <div class="mech-card">
+        <div class="mech-icon" style="background: rgba(139,92,246,0.15);">🔗</div>
+        <h3>领域纠缠模块</h3>
+        <div class="mech-abbr">DEM — Domain Entanglement Module</div>
+        <p>通过参数化纠缠门在领域间建立可学习关联，稀疏耦合矩阵控制特征迁移方向。</p>
+        <div class="mech-formula">|Ψ_ab⟩ = U_DEM(Θ_ab)(|D_a⟩ ⊗ |D_b⟩)</div>
+      </div>
+
+      <div class="mech-card">
+        <div class="mech-icon" style="background: rgba(244,114,182,0.15);">⚡</div>
+        <h3>跨域纠缠路由器</h3>
+        <div class="mech-abbr">CDE-Router</div>
+        <p>为每个token动态选择纠缠领域（软/硬/Top-K路由），内置冲突检测与解纠缠。</p>
+        <div class="mech-formula">λ_im = |⟨D_m|U_proj|x_i⟩|²</div>
+      </div>
+
+      <div class="mech-card">
+        <div class="mech-icon" style="background: rgba(251,191,36,0.15);">🎯</div>
+        <h3>领域自适应坍缩</h3>
+        <div class="mech-abbr">DA-Collapse</div>
+        <p>不同领域使用不同坍缩阈值：法律/军事要求高确定性，伦理/哲学保持多世界输出。</p>
+        <div class="mech-formula">τ_m = τ_base + Δτ_m, Δτ_m 可学习</div>
+      </div>
+
+      <div class="mech-card">
+        <div class="mech-icon" style="background: rgba(52,211,153,0.15);">🧊</div>
+        <h3>多领域量子块</h3>
+        <div class="mech-abbr">MD-QB</div>
+        <p>量子块的领域感知扩展：领域注入注意力、跨域纠缠层、领域门控FFN。</p>
+        <div class="mech-formula">QSA_Domain + QEL_Cross + FFN_Gated</div>
+      </div>
+
+      <div class="mech-card">
+        <div class="mech-icon" style="background: rgba(99,102,241,0.15);">🆕</div>
+        <h3>零样本领域扩展</h3>
+        <div class="mech-abbr">Zero-Shot Domain Extension</div>
+        <p>新领域通过纠缠推断自动获取能力，仅需少量描述文本和微调，非破坏性扩展。</p>
+        <div class="mech-formula">|D_new⟩ = Σₘ λ_m^new |D_m⟩ + |Δ_new⟩</div>
+      </div>
+    </div>
+
+    <!-- 与其他多领域方法的对比 -->
+    <div class="section-header" style="margin-top:3rem;">
+      <h2 style="font-size:1.4rem;">多领域方法对比</h2>
+    </div>
+
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th>Multi-Head Attn</th>
+          <th>Adapter/LoRA</th>
+          <th>Mixture of Experts</th>
+          <th style="color:var(--quantum-cyan);">量子架构 DEM</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>领域表示</td>
+          <td>共享参数</td>
+          <td>额外适配层</td>
+          <td>专家子网络</td>
+          <td class="highlight">领域量子态</td>
+        </tr>
+        <tr>
+          <td>跨域关联</td>
+          <td class="warning">无（隐式）</td>
+          <td class="warning">无（独立）</td>
+          <td>路由门</td>
+          <td class="highlight">纠缠门（显式+物理意义）</td>
+        </tr>
+        <tr>
+          <td>知识迁移</td>
+          <td>完全共享</td>
+          <td class="warning">无</td>
+          <td>软路由</td>
+          <td class="highlight">量子纠缠（非破坏性）</td>
+        </tr>
+        <tr>
+          <td>冲突处理</td>
+          <td class="warning">无</td>
+          <td class="warning">无</td>
+          <td>路由选择</td>
+          <td class="highlight">冲突检测+解纠缠</td>
+        </tr>
+        <tr>
+          <td>不确定性</td>
+          <td class="warning">无</td>
+          <td class="warning">无</td>
+          <td>路由置信度</td>
+          <td class="highlight">冯·诺依曼熵</td>
+        </tr>
+        <tr>
+          <td>零样本扩展</td>
+          <td class="warning">不支持</td>
+          <td>需要适配</td>
+          <td>需要新专家</td>
+          <td class="highlight">纠缠推断</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 训练范式 -->
+    <div class="section-header" style="margin-top:3rem;">
+      <h2 style="font-size:1.4rem;">多领域三级训练范式</h2>
+    </div>
+    <div class="training-phases">
+      <div class="phase-card">
+        <div class="phase-num" style="color:var(--quantum-cyan);">级别1</div>
+        <h4>领域预训练</h4>
+        <div class="phase-range">M × T_base</div>
+        <ul>
+          <li>每个领域独立预训练</li>
+          <li>学习领域特有表示 |D_m⟩</li>
+          <li>领域内纠缠参数化</li>
+        </ul>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num" style="color:var(--accent2);">级别2</div>
+        <h4>纠缠对齐</h4>
+        <div class="phase-range">T_align</div>
+        <ul>
+          <li>冻结领域内部参数</li>
+          <li>学习领域间纠缠门 Θ_ab</li>
+          <li>约束纠缠熵接近目标值</li>
+        </ul>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num" style="color:var(--quantum-pink);">级别3</div>
+        <h4>联合微调</h4>
+        <div class="phase-range">T_joint</div>
+        <ul>
+          <li>解冻所有参数</li>
+          <li>联合优化域内+跨域目标</li>
+          <li>一致性+稀疏性+冲突正则</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 路线图 -->
+  <section id="roadmap">
+    <div class="section-header">
+      <h2>实现路线图</h2>
+      <p>从概念验证到生态建设的完整路径</p>
+    </div>
+
+    <div class="roadmap">
+      <div class="roadmap-item">
+        <div class="rm-phase" style="color:var(--quantum-cyan);">Phase 1 · 2个月</div>
+        <h4>概念验证 (PoC)</h4>
+        <p>在PyTorch中实现复数张量运算基座，实现QSA和QEL基础版本，在MNIST和简化NLP任务上验证概念可行性。</p>
+      </div>
+      <div class="roadmap-item">
+        <div class="rm-phase" style="color:var(--accent2);">Phase 2 · 3个月</div>
+        <h4>核心优化</h4>
+        <p>实现QIR的GPU加速版本，实现QGD优化器，实现自适应坍缩推理，开发CUDA kernel优化复数运算。</p>
+      </div>
+      <div class="roadmap-item">
+        <div class="rm-phase" style="color:var(--quantum-pink);">Phase 3 · 4个月</div>
+        <h4>多领域纠缠扩展</h4>
+        <p>实现DQSE、DEM、CDE-Router、MD-QB，构建领域纠缠图，多领域联合训练与评估，零样本领域扩展验证。</p>
+      </div>
+      <div class="roadmap-item">
+        <div class="rm-phase" style="color:var(--quantum-green);">Phase 4 · 4个月</div>
+        <h4>模型训练与对比</h4>
+        <p>训练100M参数多领域语言模型，各领域基准测试，消融实验，长上下文评估。</p>
+      </div>
+      <div class="roadmap-item">
+        <div class="rm-phase" style="color:var(--quantum-amber);">Phase 5 · 持续</div>
+        <h4>生态建设</h4>
+        <p>开源框架发布，多模态扩展，分布式训练，API和SDK，社区建设。</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-quote">"我们选择让骰子掷，但教会AI理解骰子的每一种可能。"</div>
+  <p>© 2026 量子架构项目组 | 从量子力学到智能的范式跃迁</p>
+  <p style="margin-top:0.5rem; font-size:0.75rem; color:#64748b;">QuantumArch v1.0 — White Paper & Architecture Visualization</p>
+</footer>
+
+<script>
+// === 背景量子场动画 ===
+const bgCanvas = document.getElementById('bgCanvas');
+const bgCtx = bgCanvas.getContext('2d');
+let particles = [];
+
+function resizeBg() {
+  bgCanvas.width = window.innerWidth;
+  bgCanvas.height = window.innerHeight;
+}
+resizeBg();
+window.addEventListener('resize', resizeBg);
+
+class Particle {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.x = Math.random() * bgCanvas.width;
+    this.y = Math.random() * bgCanvas.height;
+    this.vx = (Math.random() - 0.5) * 0.3;
+    this.vy = (Math.random() - 0.5) * 0.3;
+    this.r = Math.random() * 2 + 0.5;
+    this.alpha = Math.random() * 0.5 + 0.1;
+    this.hue = Math.random() * 60 + 220; // blue-purple
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.x < 0 || this.x > bgCanvas.width || this.y < 0 || this.y > bgCanvas.height) {
+      this.reset();
+    }
+  }
+  draw() {
+    bgCtx.beginPath();
+    bgCtx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    bgCtx.fillStyle = `hsla(${this.hue}, 70%, 60%, ${this.alpha})`;
+    bgCtx.fill();
+  }
+}
+
+for (let i = 0; i < 80; i++) particles.push(new Particle());
+
+function drawBg() {
+  bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+  
+  particles.forEach(p => { p.update(); p.draw(); });
+  
+  // Draw connections
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 150) {
+        bgCtx.beginPath();
+        bgCtx.moveTo(particles[i].x, particles[i].y);
+        bgCtx.lineTo(particles[j].x, particles[j].y);
+        bgCtx.strokeStyle = `hsla(240, 60%, 50%, ${0.08 * (1 - dist / 150)})`;
+        bgCtx.lineWidth = 0.5;
+        bgCtx.stroke();
+      }
+    }
+  }
+  
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+
+// === 导航 ===
+function navTo(e, id) {
+  e.preventDefault();
+  document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+  e.target.classList.add('active');
+}
+
+// Scroll spy
+const sections = ['overview', 'mechanisms', 'architecture', 'interference', 'comparison', 'roadmap'];
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.offsetTop - 100 <= window.scrollY) current = id;
+  });
+  document.querySelectorAll('.nav-links a').forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+});
+
+// === 干涉演示 ===
+const intCanvas = document.getElementById('interferenceCanvas');
+const intCtx = intCanvas.getContext('2d');
+let demoMode = 'constructive';
+let animTime = 0;
+
+function resizeInt() {
+  const rect = intCanvas.getBoundingClientRect();
+  intCanvas.width = rect.width * window.devicePixelRatio;
+  intCanvas.height = rect.height * window.devicePixelRatio;
+  intCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+}
+resizeInt();
+window.addEventListener('resize', resizeInt);
+
+function setDemoMode(mode) {
+  demoMode = mode;
+  document.querySelectorAll('.demo-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function drawInterference() {
+  const w = intCanvas.width / window.devicePixelRatio;
+  const h = intCanvas.height / window.devicePixelRatio;
+  intCtx.clearRect(0, 0, w, h);
+  
+  animTime += 0.02;
+  
+  const centerY = h / 2;
+  const numWaves = 8;
+  
+  // Title
+  intCtx.fillStyle = '#e2e8f0';
+  intCtx.font = '13px Segoe UI';
+  intCtx.textAlign = 'center';
+  const titles = {
+    constructive: '相长干涉 — 相关信号的波函数同相叠加，振幅增强',
+    destructive: '相消干涉 — 无关信号的波函数反相叠加，振幅抵消',
+    mixed: '混合干涉 — 实际场景中的相长+相消同时发生',
+    routing: '路由筛选 — 干涉后概率分布，top-k选择相关token'
+  };
+  intCtx.fillText(titles[demoMode], w/2, 25);
+  
+  if (demoMode === 'routing') {
+    drawRoutingDemo(w, h);
+  } else {
+    drawWaveDemo(w, h, centerY);
+  }
+  
+  requestAnimationFrame(drawInterference);
+}
+
+function drawWaveDemo(w, h, centerY) {
+  const waves = [];
+  const colors = ['#22d3ee', '#8b5cf6', '#f472b6', '#34d399', '#fbbf24', '#6366f1', '#ec4899', '#10b981'];
+  
+  for (let i = 0; i < numWaves; i++) {
+    let phase = 0;
+    let amp = 0.6 + Math.random() * 0.4;
+    let freq = 0.01 + i * 0.003;
+    
+    if (demoMode === 'constructive') {
+      phase = animTime; // all same phase
+      amp = 0.8;
+    } else if (demoMode === 'destructive') {
+      phase = i < 4 ? 0 : Math.PI; // half opposite phase
+      amp = 0.8;
+    } else {
+      phase = animTime + i * 0.7;
+    }
+    
+    waves.push({ phase, amp, freq, color: colors[i] });
+  }
+  
+  // Draw individual waves (faint)
+  waves.forEach((wave, idx) => {
+    intCtx.beginPath();
+    intCtx.strokeStyle = wave.color + '30';
+    intCtx.lineWidth = 1;
+    for (let x = 40; x < w - 40; x++) {
+      const y = centerY + Math.sin(x * wave.freq + wave.phase) * 30 * wave.amp;
+      x === 40 ? intCtx.moveTo(x, y) : intCtx.lineTo(x, y);
+    }
+    intCtx.stroke();
+  });
+  
+  // Draw superposition wave (bright)
+  intCtx.beginPath();
+  const gradient = intCtx.createLinearGradient(40, 0, w - 40, 0);
+  gradient.addColorStop(0, '#22d3ee');
+  gradient.addColorStop(0.5, '#8b5cf6');
+  gradient.addColorStop(1, '#f472b6');
+  intCtx.strokeStyle = gradient;
+  intCtx.lineWidth = 3;
+  intCtx.shadowColor = '#6366f1';
+  intCtx.shadowBlur = 15;
+  
+  for (let x = 40; x < w - 40; x++) {
+    let y = 0;
+    waves.forEach(wave => {
+      y += Math.sin(x * wave.freq + wave.phase) * 30 * wave.amp;
+    });
+    y /= numWaves;
+    y = centerY + y;
+    x === 40 ? intCtx.moveTo(x, y) : intCtx.lineTo(x, y);
+  }
+  intCtx.stroke();
+  intCtx.shadowBlur = 0;
+  
+  // Amplitude indicator
+  const superAmp = demoMode === 'constructive' ? 'HIGH' : demoMode === 'destructive' ? 'LOW' : 'MEDIUM';
+  const ampColor = demoMode === 'constructive' ? '#34d399' : demoMode === 'destructive' ? '#ef4444' : '#fbbf24';
+  intCtx.fillStyle = ampColor;
+  intCtx.font = 'bold 14px Segoe UI';
+  intCtx.textAlign = 'right';
+  intCtx.fillText(`叠加振幅: ${superAmp}`, w - 40, h - 20);
+}
+
+function drawRoutingDemo(w, h) {
+  const tokens = ['The', 'cat', 'sat', 'on', 'the', 'warm', 'mat', '.'];
+  const numTokens = tokens.length;
+  const barWidth = (w - 120) / numTokens;
+  const query = '"cat"';
+  
+  // Compute interference probabilities
+  let probs = [];
+  const relevance = [0.2, 1.0, 0.7, 0.3, 0.15, 0.4, 0.6, 0.05];
+  
+  tokens.forEach((token, i) => {
+    let rel = relevance[i];
+    let interference = rel * Math.cos(animTime + i * 0.5) * 0.3;
+    let prob = Math.max(0.02, rel + interference);
+    probs.push(prob);
+  });
+  
+  // Normalize
+  const sumProbs = probs.reduce((a, b) => a + b, 0);
+  probs = probs.map(p => p / sumProbs);
+  
+  // Find top-k
+  const sorted = probs.map((p, i) => ({p, i})).sort((a, b) => b.p - a.p);
+  const topK = new Set(sorted.slice(0, 3).map(s => s.i));
+  
+  // Query label
+  intCtx.fillStyle = '#fbbf24';
+  intCtx.font = 'bold 14px Segoe UI';
+  intCtx.textAlign = 'left';
+  intCtx.fillText(`Query: ${query}`, 40, 60);
+  
+  // Draw bars
+  intCtx.textAlign = 'center';
+  tokens.forEach((token, i) => {
+    const x = 60 + i * barWidth;
+    const barH = probs[i] * (h - 120);
+    const isTopK = topK.has(i);
+    
+    // Bar
+    const barGrad = intCtx.createLinearGradient(x, h - 50 - barH, x, h - 50);
+    if (isTopK) {
+      barGrad.addColorStop(0, '#22d3ee');
+      barGrad.addColorStop(1, '#6366f1');
+    } else {
+      barGrad.addColorStop(0, 'rgba(100,116,139,0.3)');
+      barGrad.addColorStop(1, 'rgba(100,116,139,0.1)');
+    }
+    intCtx.fillStyle = barGrad;
+    intCtx.fillRect(x + 4, h - 50 - barH, barWidth - 8, barH);
+    
+    if (isTopK) {
+      intCtx.shadowColor = '#22d3ee';
+      intCtx.shadowBlur = 10;
+      intCtx.fillRect(x + 4, h - 50 - barH, barWidth - 8, barH);
+      intCtx.shadowBlur = 0;
+    }
+    
+    // Token label
+    intCtx.fillStyle = isTopK ? '#e2e8f0' : '#64748b';
+    intCtx.font = isTopK ? 'bold 13px Segoe UI' : '12px Segoe UI';
+    intCtx.fillText(token, x + barWidth/2, h - 30);
+    
+    // Probability
+    intCtx.fillStyle = isTopK ? '#22d3ee' : '#475569';
+    intCtx.font = '11px Segoe UI';
+    intCtx.fillText((probs[i] * 100).toFixed(1) + '%', x + barWidth/2, h - 55 - barH);
+  });
+  
+  // Legend
+  intCtx.textAlign = 'right';
+  intCtx.fillStyle = '#22d3ee';
+  intCtx.fillRect(w - 150, 55, 12, 12);
+  intCtx.fillStyle = '#e2e8f0';
+  intCtx.font = '12px Segoe UI';
+  intCtx.textAlign = 'left';
+  intCtx.fillText('Top-K 选中', w - 132, 66);
+  
+  intCtx.fillStyle = 'rgba(100,116,139,0.5)';
+  intCtx.fillRect(w - 150, 75, 12, 12);
+  intCtx.fillStyle = '#e2e8f0';
+  intCtx.fillText('未选中', w - 132, 86);
+}
+
+drawInterference();
+
+// === 复杂度图表 ===
+const cpxCanvas = document.getElementById('complexityCanvas');
+const cpxCtx = cpxCanvas.getContext('2d');
+
+function resizeCpx() {
+  const rect = cpxCanvas.getBoundingClientRect();
+  cpxCanvas.width = rect.width * window.devicePixelRatio;
+  cpxCanvas.height = rect.height * window.devicePixelRatio;
+  cpxCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+}
+resizeCpx();
+window.addEventListener('resize', () => { resizeCpx(); drawComplexity(); });
+
+function drawComplexity() {
+  const w = cpxCanvas.width / window.devicePixelRatio;
+  const h = cpxCanvas.height / window.devicePixelRatio;
+  cpxCtx.clearRect(0, 0, w, h);
+  
+  const padding = { top: 40, right: 30, bottom: 50, left: 70 };
+  const chartW = w - padding.left - padding.right;
+  const chartH = h - padding.top - padding.bottom;
+  
+  // Axes
+  cpxCtx.strokeStyle = 'rgba(100,116,139,0.3)';
+  cpxCtx.lineWidth = 1;
+  cpxCtx.beginPath();
+  cpxCtx.moveTo(padding.left, padding.top);
+  cpxCtx.lineTo(padding.left, h - padding.bottom);
+  cpxCtx.lineTo(w - padding.right, h - padding.bottom);
+  cpxCtx.stroke();
+  
+  // Labels
+  cpxCtx.fillStyle = '#94a3b8';
+  cpxCtx.font = '12px Segoe UI';
+  cpxCtx.textAlign = 'center';
+  cpxCtx.fillText('序列长度 (tokens)', padding.left + chartW/2, h - 10);
+  
+  cpxCtx.save();
+  cpxCtx.translate(18, padding.top + chartH/2);
+  cpxCtx.rotate(-Math.PI/2);
+  cpxCtx.fillText('计算量 (相对FLOPs)', 0, 0);
+  cpxCtx.restore();
+  
+  // Data points
+  const points = [1, 2, 4, 8, 16, 32, 64, 128]; // in thousands
+  const transformer = points.map(n => n * n); // O(n²)
+  const quantum = points.map(n => n * Math.log2(n) * 8); // O(n log n) with constant
+  
+  const maxVal = transformer[transformer.length - 1];
+  const xScale = (i) => padding.left + (i / (points.length - 1)) * chartW;
+  const yScale = (v) => h - padding.bottom - (v / maxVal) * chartH;
+  
+  // Grid
+  cpxCtx.strokeStyle = 'rgba(100,116,139,0.1)';
+  for (let i = 0; i < 5; i++) {
+    const y = padding.top + (i / 4) * chartH;
+    cpxCtx.beginPath();
+    cpxCtx.moveTo(padding.left, y);
+    cpxCtx.lineTo(w - padding.right, y);
+    cpxCtx.stroke();
+  }
+  
+  // Transformer line (red)
+  cpxCtx.beginPath();
+  cpxCtx.strokeStyle = '#ef4444';
+  cpxCtx.lineWidth = 2.5;
+  transformer.forEach((v, i) => {
+    const x = xScale(i), y = yScale(v);
+    i === 0 ? cpxCtx.moveTo(x, y) : cpxCtx.lineTo(x, y);
+  });
+  cpxCtx.stroke();
+  
+  // Transformer dots
+  transformer.forEach((v, i) => {
+    cpxCtx.beginPath();
+    cpxCtx.arc(xScale(i), yScale(v), 4, 0, Math.PI * 2);
+    cpxCtx.fillStyle = '#ef4444';
+    cpxCtx.fill();
+  });
+  
+  // Quantum line (cyan)
+  cpxCtx.beginPath();
+  cpxCtx.strokeStyle = '#22d3ee';
+  cpxCtx.lineWidth = 2.5;
+  quantum.forEach((v, i) => {
+    const x = xScale(i), y = yScale(v);
+    i === 0 ? cpxCtx.moveTo(x, y) : cpxCtx.lineTo(x, y);
+  });
+  cpxCtx.stroke();
+  
+  // Quantum dots
+  quantum.forEach((v, i) => {
+    cpxCtx.beginPath();
+    cpxCtx.arc(xScale(i), yScale(v), 4, 0, Math.PI * 2);
+    cpxCtx.fillStyle = '#22d3ee';
+    cpxCtx.fill();
+  });
+  
+  // Mamba line (amber, reference)
+  const mamba = points.map(n => n * 10);
+  cpxCtx.beginPath();
+  cpxCtx.strokeStyle = '#fbbf24';
+  cpxCtx.lineWidth = 2;
+  cpxCtx.setLineDash([5, 5]);
+  mamba.forEach((v, i) => {
+    const x = xScale(i), y = yScale(v);
+    i === 0 ? cpxCtx.moveTo(x, y) : cpxCtx.lineTo(x, y);
+  });
+  cpxCtx.stroke();
+  cpxCtx.setLineDash([]);
+  
+  // X axis labels
+  cpxCtx.fillStyle = '#94a3b8';
+  cpxCtx.font = '11px Segoe UI';
+  cpxCtx.textAlign = 'center';
+  points.forEach((p, i) => {
+    cpxCtx.fillText(p + 'K', xScale(i), h - padding.bottom + 20);
+  });
+  
+  // Legend
+  const legendX = w - padding.right - 180;
+  const legendY = padding.top + 15;
+  
+  cpxCtx.fillStyle = 'rgba(15,15,50,0.8)';
+  cpxCtx.fillRect(legendX - 10, legendY - 10, 185, 75);
+  cpxCtx.strokeStyle = 'rgba(100,116,139,0.2)';
+  cpxCtx.strokeRect(legendX - 10, legendY - 10, 185, 75);
+  
+  [
+    { color: '#ef4444', label: 'Transformer O(n²)', dash: false },
+    { color: '#22d3ee', label: '量子架构 O(n log n)', dash: false },
+    { color: '#fbbf24', label: 'Mamba O(n) [参考]', dash: true }
+  ].forEach((item, i) => {
+    const y = legendY + 10 + i * 20;
+    cpxCtx.beginPath();
+    cpxCtx.strokeStyle = item.color;
+    cpxCtx.lineWidth = 2;
+    if (item.dash) cpxCtx.setLineDash([5, 5]);
+    else cpxCtx.setLineDash([]);
+    cpxCtx.moveTo(legendX, y);
+    cpxCtx.lineTo(legendX + 25, y);
+    cpxCtx.stroke();
+    cpxCtx.setLineDash([]);
+    cpxCtx.fillStyle = '#e2e8f0';
+    cpxCtx.font = '12px Segoe UI';
+    cpxCtx.textAlign = 'left';
+    cpxCtx.fillText(item.label, legendX + 32, y + 4);
+  });
+  
+  // Speedup annotation
+  const lastIdx = points.length - 1;
+  const speedup = (transformer[lastIdx] / quantum[lastIdx]).toFixed(0);
+  cpxCtx.fillStyle = '#22d3ee';
+  cpxCtx.font = 'bold 13px Segoe UI';
+  cpxCtx.textAlign = 'center';
+  cpxCtx.fillText(`${speedup}× 加速`, xScale(lastIdx), Math.min(yScale(quantum[lastIdx]) - 15, h - padding.bottom - 30));
+  
+  cpxCtx.beginPath();
+  cpxCtx.setLineDash([3, 3]);
+  cpxCtx.strokeStyle = 'rgba(34,211,238,0.4)';
+  cpxCtx.moveTo(xScale(lastIdx), yScale(quantum[lastIdx]) - 5);
+  cpxCtx.lineTo(xScale(lastIdx), yScale(quantum[lastIdx]) - 25);
+  cpxCtx.stroke();
+  cpxCtx.setLineDash([]);
+}
+
+drawComplexity();
+
+// === Intersection Observer for animations ===
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('animate-in');
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.mech-card, .stat-card, .phase-card, .roadmap-item').forEach(el => {
+  observer.observe(el);
+});
+
+// === Mechanism detail (simple alert placeholder) ===
+function showMechDetail(type) {
+  const details = {
+    qsa: '量子叠加注意力 (QSA)\n\n核心思想：用复数振幅的干涉替代传统点积注意力。每个token编码为量子态，查询-键交互产生复数内积，通过干涉路由筛选top-k相关token，实现O(n log n)复杂度。\n\n数学基础：Born法则 P(i)=|⟨q|k_i⟩|² 给出注意力概率。',
+    qel: '量子纠缠层 (QEL)\n\n核心思想：用张量积纠缠替代残差连接。局部纠缠门建立相邻token的关联，全局QFT建立长程关联。纠缠强度自适应调整。\n\n关键优势：信息通过纠缠融合而非简单相加，保持完整的相位信息。',
+    qci: '量子坍缩推理 (QCI)\n\n核心思想：利用波函数坍缩实现概率性推理。高确定性token快速退出（节省计算），低确定性token深入处理。\n\n不确定性度量：冯·诺依曼熵 S(ρ) = -Tr(ρ log ρ)',
+    qir: '量子干涉路由 (QIR)\n\n核心思想：利用量子干涉的相长/相消效应筛选token。相关信号相长干涉（增强），无关信号相消干涉（抑制）。\n\n类似Grover算法的振幅放大。',
+    qgd: '量子梯度下降 (QGD)\n\n核心思想：在复数希尔伯特空间中优化。使用Wirtinger导数分别计算模长和相位的梯度，Cayley变换保持酉性约束。\n\n优势：复数空间中鞍点更稀疏。',
+    cr: '复数酉表示 (CR)\n\n核心思想：所有核心权重为复数酉矩阵 W†W=I。相位编码额外一维信息，酉性确保梯度范数守恒。\n\n参数化：Cayley变换 W = (I+iΩ/2)⁻¹(I-iΩ/2)',
+    up: '不确定性传播 (UP)\n\n核心思想：每层量子态的冯·诺依曼熵作为不确定性度量。动态坍缩阈值控制计算深度。\n\n应用：医疗、金融等需要置信度的场景。'
+  };
+  alert(details[type]);
+}
+
+// === 领域纠缠图可视化 ===
+const dgCanvas = document.getElementById('domainGraphCanvas');
+const dgCtx = dgCanvas.getContext('2d');
+let graphMode = 'entanglement';
+let graphTime = 0;
+
+function resizeDG() {
+  const rect = dgCanvas.getBoundingClientRect();
+  dgCanvas.width = rect.width * window.devicePixelRatio;
+  dgCanvas.height = rect.height * window.devicePixelRatio;
+  dgCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+}
+resizeDG();
+window.addEventListener('resize', () => { resizeDG(); drawDomainGraph(); });
+
+function setGraphMode(mode) {
+  graphMode = mode;
+  document.querySelectorAll('#domains .demo-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+// 领域数据
+const domains = [
+  { id: 0, name: '基础哲学', x: 0.50, y: 0.08, r: 28, color: '#a78bfa', level: 'root' },
+  { id: 1, name: '历史学', x: 0.20, y: 0.28, r: 24, color: '#22d3ee', level: 'l1' },
+  { id: 2, name: '思想史', x: 0.50, y: 0.28, r: 24, color: '#8b5cf6', level: 'l1' },
+  { id: 3, name: '伦理学', x: 0.80, y: 0.28, r: 24, color: '#f472b6', level: 'l1' },
+  { id: 4, name: '法律', x: 0.12, y: 0.52, r: 22, color: '#34d399', level: 'l2' },
+  { id: 5, name: '政治', x: 0.35, y: 0.52, r: 22, color: '#fbbf24', level: 'l2' },
+  { id: 6, name: '社会', x: 0.58, y: 0.52, r: 22, color: '#fb923c', level: 'l2' },
+  { id: 7, name: '文化', x: 0.78, y: 0.52, r: 22, color: '#f472b6', level: 'l2' },
+  { id: 8, name: '进步', x: 0.92, y: 0.52, r: 22, color: '#34d399', level: 'l2' },
+  { id: 9, name: '军事', x: 0.12, y: 0.78, r: 20, color: '#ef4444', level: 'l3' },
+  { id: 10, name: '外交', x: 0.38, y: 0.78, r: 20, color: '#22d3ee', level: 'l3' },
+  { id: 11, name: '发展', x: 0.62, y: 0.78, r: 20, color: '#fbbf24', level: 'l3' },
+];
+
+const entanglements = [
+  { from: 0, to: 1, w: 0.85 }, { from: 0, to: 2, w: 0.95 }, { from: 0, to: 3, w: 0.90 },
+  { from: 1, to: 4, w: 0.80 }, { from: 1, to: 5, w: 0.65 },
+  { from: 2, to: 3, w: 0.90 }, { from: 2, to: 5, w: 0.70 },
+  { from: 3, to: 7, w: 0.75 }, { from: 3, to: 8, w: 0.70 },
+  { from: 4, to: 9, w: 0.70 }, { from: 5, to: 10, w: 0.80 }, { from: 5, to: 9, w: 0.65 },
+  { from: 6, to: 7, w: 0.85 }, { from: 6, to: 8, w: 0.75 },
+  { from: 4, to: 3, w: 0.60 }, { from: 5, to: 10, w: 0.80 },
+];
+
+// 冲突对
+const conflicts = [
+  { a: 4, b: 3, level: 0.45, desc: '法律 vs 伦理' },
+  { a: 5, b: 9, level: 0.55, desc: '政治 vs 军事' },
+  { a: 3, b: 8, level: 0.35, desc: '伦理 vs 进步' },
+];
+
+function drawDomainGraph() {
+  const w = dgCanvas.width / window.devicePixelRatio;
+  const h = dgCanvas.height / window.devicePixelRatio;
+  dgCtx.clearRect(0, 0, w, h);
+  graphTime += 0.015;
+
+  const pad = 40;
+  const cw = w - pad * 2;
+  const ch = h - pad * 2;
+
+  // Map domain positions to canvas
+  const positions = domains.map(d => ({
+    x: pad + d.x * cw,
+    y: pad + d.y * ch,
+    r: d.r,
+    ...d
+  }));
+
+  // Draw edges
+  entanglements.forEach(e => {
+    const a = positions[e.from];
+    const b = positions[e.to];
+    const isActive = graphMode === 'routing' && (
+      activeRoute && (activeRoute.includes(e.from) || activeRoute.includes(e.to))
+    );
+
+    // Animated particles along edge
+    const particleCount = Math.floor(e.w * 4);
+    for (let p = 0; p < particleCount; p++) {
+      const t = ((graphTime * 0.5 * e.w + p / particleCount) % 1);
+      const px = a.x + (b.x - a.x) * t;
+      const py = a.y + (b.y - a.y) * t;
+
+      dgCtx.beginPath();
+      dgCtx.arc(px, py, 1.5, 0, Math.PI * 2);
+      const alpha = isActive ? 0.8 : (0.2 + e.w * 0.3);
+      dgCtx.fillStyle = `rgba(139, 92, 246, ${alpha})`;
+      dgCtx.fill();
+    }
+
+    // Edge line
+    dgCtx.beginPath();
+    dgCtx.moveTo(a.x, a.y);
+    dgCtx.lineTo(b.x, b.y);
+    const edgeAlpha = isActive ? 0.6 : (0.08 + e.w * 0.12);
+    dgCtx.strokeStyle = `rgba(139, 92, 246, ${edgeAlpha})`;
+    dgCtx.lineWidth = isActive ? 2.5 : (1 + e.w * 2);
+    dgCtx.stroke();
+
+    // Entanglement weight label
+    if (graphMode === 'entanglement') {
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      dgCtx.fillStyle = `rgba(139, 92, 246, ${isActive ? 0.9 : 0.5})`;
+      dgCtx.font = '10px Segoe UI';
+      dgCtx.textAlign = 'center';
+      dgCtx.fillText(e.w.toFixed(1), mx, my - 6);
+    }
+  });
+
+  // Draw conflict indicators
+  if (graphMode === 'conflict') {
+    conflicts.forEach(c => {
+      const a = positions[c.a];
+      const b = positions[c.b];
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+
+      // Pulsing warning
+      const pulse = 0.5 + 0.5 * Math.sin(graphTime * 3);
+      dgCtx.beginPath();
+      dgCtx.arc(mx, my, 14 + pulse * 4, 0, Math.PI * 2);
+      dgCtx.fillStyle = `rgba(239, 68, 68, ${0.15 + pulse * 0.1})`;
+      dgCtx.fill();
+      dgCtx.strokeStyle = `rgba(239, 68, 68, ${0.5 + pulse * 0.3})`;
+      dgCtx.lineWidth = 1.5;
+      dgCtx.stroke();
+
+      dgCtx.fillStyle = '#ef4444';
+      dgCtx.font = 'bold 16px Segoe UI';
+      dgCtx.textAlign = 'center';
+      dgCtx.fillText('⚠', mx, my + 5);
+
+      dgCtx.fillStyle = '#fca5a5';
+      dgCtx.font = '10px Segoe UI';
+      dgCtx.fillText(`${c.desc} C=${c.level.toFixed(2)}`, mx, my + 22);
+    });
+  }
+
+  // Draw nodes
+  positions.forEach((d, i) => {
+    const isRouted = graphMode === 'routing' && activeRoute && activeRoute.includes(i);
+    const pulse = isRouted ? 0.5 + 0.5 * Math.sin(graphTime * 4) : 0;
+
+    // Glow
+    if (isRouted || d.level === 'root') {
+      dgCtx.beginPath();
+      dgCtx.arc(d.x, d.y, d.r + 8 + pulse * 5, 0, Math.PI * 2);
+      const glowGrad = dgCtx.createRadialGradient(d.x, d.y, d.r, d.x, d.y, d.r + 12 + pulse * 5);
+      glowGrad.addColorStop(0, d.color + '40');
+      glowGrad.addColorStop(1, d.color + '00');
+      dgCtx.fillStyle = glowGrad;
+      dgCtx.fill();
+    }
+
+    // Node circle
+    dgCtx.beginPath();
+    dgCtx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+    const nodeGrad = dgCtx.createRadialGradient(d.x - 5, d.y - 5, 2, d.x, d.y, d.r);
+    nodeGrad.addColorStop(0, d.color + 'cc');
+    nodeGrad.addColorStop(1, d.color + '44');
+    dgCtx.fillStyle = nodeGrad;
+    dgCtx.fill();
+    dgCtx.strokeStyle = d.color;
+    dgCtx.lineWidth = isRouted ? 2.5 : 1.5;
+    dgCtx.stroke();
+
+    // Label
+    dgCtx.fillStyle = '#e2e8f0';
+    dgCtx.font = isRouted ? 'bold 12px Segoe UI' : '11px Segoe UI';
+    dgCtx.textAlign = 'center';
+    dgCtx.fillText(d.name, d.x, d.y + d.r + 16);
+
+    // Quantum state indicator
+    if (graphMode === 'entanglement' || graphMode === 'routing') {
+      dgCtx.fillStyle = d.color;
+      dgCtx.font = '9px Segoe UI';
+      dgCtx.fillText('|D' + i + '⟩', d.x, d.y + 4);
+    }
+  });
+
+  // Routing mode: simulate a query
+  if (graphMode === 'routing') {
+    if (!activeRoute) {
+      activeRoute = simulateRoute();
+    }
+    // Highlight route
+    dgCtx.fillStyle = '#fbbf24';
+    dgCtx.font = 'bold 13px Segoe UI';
+    dgCtx.textAlign = 'left';
+    dgCtx.fillText('输入: "军事外交战略分析"', pad, h - 15);
+
+    dgCtx.fillStyle = '#94a3b8';
+    dgCtx.font = '11px Segoe UI';
+    const routeNames = activeRoute.map(i => domains[i].name).join(' → ');
+    dgCtx.fillText('路由路径: ' + routeNames, pad + 260, h - 15);
+  }
+
+  if (graphMode === 'entanglement') {
+    dgCtx.fillStyle = '#94a3b8';
+    dgCtx.font = '11px Segoe UI';
+    dgCtx.textAlign = 'left';
+    dgCtx.fillText('纠缠强度 W ∈ [0,1]，线条粗细 ∝ 纠缠度，粒子流动 = 知识传递', pad, h - 15);
+  }
+
+  if (graphMode === 'conflict') {
+    dgCtx.fillStyle = '#fca5a5';
+    dgCtx.font = '11px Segoe UI';
+    dgCtx.textAlign = 'left';
+    dgCtx.fillText('⚠ 检测到领域间知识冲突，C = 冲突度量（>0.3 触发解纠缠）', pad, h - 15);
+  }
+
+  requestAnimationFrame(drawDomainGraph);
+}
+
+let activeRoute = null;
+function simulateRoute() {
+  // Simulate routing for "military diplomacy strategy"
+  return [9, 5, 10, 1, 0]; // 军事→政治→外交→历史→哲学
+}
+
+drawDomainGraph();
+
+// Update scroll spy
+const sectionsAll = ['overview', 'mechanisms', 'architecture', 'interference', 'comparison', 'training', 'domains', 'roadmap'];
+window.removeEventListener('scroll', scrollSpyHandler);
+function scrollSpyHandler() {
+  let current = '';
+  sectionsAll.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.offsetTop - 100 <= window.scrollY) current = id;
+  });
+  document.querySelectorAll('.nav-links a').forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+}
+window.addEventListener('scroll', scrollSpyHandler);
+</script>
+
+</body>
+</html>

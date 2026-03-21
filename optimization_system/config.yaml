@@ -1,0 +1,470 @@
+# 量子架构自动化优化系统配置文件 v1.0
+
+# ============================================================================
+# 全局配置
+# ============================================================================
+system:
+  name: "QuantumArch Optimization System"
+  version: "1.0.0"
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  workspace_dir: "./experiments"
+
+# ============================================================================
+# 监控配置
+# ============================================================================
+monitoring:
+  # Prometheus配置
+  prometheus:
+    enabled: true
+    port: 8000
+    metrics_path: "/metrics"
+
+  # Grafana配置
+  grafana:
+    enabled: true
+    url: "http://localhost:3000"
+    dashboard_dir: "./monitoring/grafana_dashboards"
+
+  # 性能监控窗口
+  performance:
+    window_size: 1000  # 保留最近1000步的指标
+    update_interval: 10  # 每10步更新一次统计
+
+# ============================================================================
+# 成本控制配置
+# ============================================================================
+cost_control:
+  # GPU成本
+  gpu:
+    cost_per_hour: 3.0  # 美元/小时
+    daily_budget: 100.0  # 美元/天
+    monthly_budget: 3000.0  # 美元/月
+
+  # API调用成本
+  api:
+    max_cost_per_hour: 5.0  # 美元/小时
+    cost_per_call: 0.01  # 每次调用成本（估计）
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5  # 连续失败次数
+      recovery_time: 300  # 恢复时间（秒）
+
+  # 预算超支策略
+  budget_exceeded:
+    action: "downgrade"  # stop, downgrade, warn
+    downgrade_strategies:
+      - "reduce_batch_size"
+      - "decrease_sampling"
+      - "increase_early_exit"
+    warning_threshold: 0.9  # 90%时告警
+    stop_threshold: 1.05  # 105%时停止
+
+# ============================================================================
+# 影子测试配置
+# ============================================================================
+shadow_testing:
+  enabled: true
+  shadow_ratio: 0.05  # 5%流量用于影子测试
+  significance_level: 0.05  # 统计显著性水平
+
+  # 晋升准则
+  promotion:
+    min_samples: 100  # 最小样本数
+    improvement_threshold: 0.03  # 最小改进率3%
+    statistical_significance: true  # 要求统计显著性
+
+  # 测试变体配置
+  variants:
+    - name: "variant_A"
+      description: "QSA优化 - 相位调制函数v1"
+      enabled: true
+    - name: "variant_B"
+      description: "QCI优化 - 动态阈值v2"
+      enabled: true
+    - name: "variant_C"
+      description: "QEL优化 - 自适应纠缠强度"
+      enabled: false
+
+# ============================================================================
+# QSA（量子叠加注意力）配置
+# ============================================================================
+qsa:
+  # 自适应筛选比例
+  adaptive_topk:
+    enabled: true
+    base_ratio: 0.1  # 初始筛选比例
+    bounds: [0.05, 0.3]  # 比例范围
+    update_interval: 100  # 每100步更新一次
+
+  # 评分权重
+  scoring_weights:
+    accuracy: 0.5
+    speedup: 0.3
+    cost: 0.2
+
+  # 干涉调制
+  interference:
+    enabled: true
+    function_type: "adaptive"  # fixed, adaptive, learned
+    update_interval: 1000  # 每1000步更新
+
+# ============================================================================
+# QCI（量子坍缩推理）配置
+# ============================================================================
+qci:
+  # 早退阈值
+  thresholds:
+    tau_low_initial: 0.5  # 初始低阈值
+    tau_high_initial: 1.5  # 初始高阈值
+    adaptive: true  # 是否自适应
+    update_interval: 1000  # 更新间隔
+
+  # 早期退出策略
+  early_exit:
+    enabled: true
+    max_early_exit_layers: 3  # 最多早退3层
+    target_early_exit_rate: 0.6  # 目标早退率60%
+    min_confidence: 0.95  # 最小置信度
+
+  # 坍缩阈值学习器
+  threshold_learner:
+    enabled: true
+    learning_rate: 0.01
+    state_dim: 3
+    replay_buffer_size: 10000
+
+# ============================================================================
+# QGD（量子梯度下降）配置
+# ============================================================================
+qgd:
+  # 学习率
+  learning_rates:
+    mod_base: 1e-4  # 模长基础学习率
+    phase_base: 1e-3  # 相位基础学习率
+    adaptive: true  # 是否自适应
+    update_interval: 100  # 更新间隔
+
+  # 学习率范围
+  lr_bounds:
+    mod: [1e-6, 1e-2]
+    phase: [1e-5, 1e-1]
+
+  # 优化器
+  optimizer:
+    type: "Adam"  # Adam, AdamW, SGD
+    beta1: 0.9
+    beta2: 0.999
+    eps: 1e-8
+    weight_decay: 0.01
+
+  # 梯度裁剪
+  gradient_clipping:
+    enabled: true
+    clip_value: 1.0
+    clip_type: "norm"  # norm, value
+
+# ============================================================================
+# 酉约束配置
+# ============================================================================
+unitarity:
+  # Cayley变换参数
+  cayley_transform:
+    enabled: true
+    stabilization: true  # 数值稳定化
+
+  # 约束监控
+  monitoring:
+    enabled: true
+    check_interval: 10  # 每10步检查
+    violation_threshold: 1e-4  # 违背阈值
+    violation_action: "reproject"  # ignore, warn, reproject, stop
+
+  # 正则化
+  regularization:
+    unitarity_weight: 0.01  # 酉性正则化权重
+    purity_weight: 0.001  # 纯度正则化权重
+
+# ============================================================================
+# 异常检测配置
+# ============================================================================
+anomaly_detection:
+  enabled: true
+  window_size: 100
+
+  # 检测规则
+  rules:
+    loss_explosion:
+      enabled: true
+      threshold_multiplier: 3.0  # 损失>平均值的3倍
+      min_samples: 10
+
+    gradient_explosion:
+      enabled: true
+      threshold: 10.0  # 梯度范数>10
+
+    gradient_vanishing:
+      enabled: true
+      threshold: 1e-7  # 梯度范数<1e-7
+
+    performance_degradation:
+      enabled: true
+      slowdown_multiplier: 2.0  # 速度<平均值的1/2
+      min_samples: 100
+
+    memory_leak:
+      enabled: true
+      percentile_threshold: 99  # >99%分位数
+
+    unitarity_violation:
+      enabled: true
+      threshold: 1e-4
+
+# ============================================================================
+# 自动恢复配置
+# ============================================================================
+auto_recovery:
+  enabled: true
+
+  # 恢复策略
+  strategies:
+    loss_explosion:
+      action: "rollback"
+      reduce_lr_factor: 0.5
+      checkpoint_name: "latest"
+
+    gradient_explosion:
+      action: "clip_and_reduce_lr"
+      clip_value: 1.0
+      reduce_lr_factor: 0.5
+
+    gradient_vanishing:
+      action: "reinitialize_output"
+      reinit_method: "xavier_uniform"
+
+    performance_degradation:
+      action: "restart"
+      checkpoint_name: "latest_best"
+
+    unitarity_violation:
+      action: "reproject"
+      reproject_method: "cayley"
+
+  # 恢复限制
+  limits:
+    max_recoveries_per_hour: 10
+    recovery_cooldown: 300  # 冷却时间（秒）
+
+# ============================================================================
+# Checkpoint配置
+# ============================================================================
+checkpointing:
+  enabled: true
+  save_interval: 1000  # 每1000步保存
+  save_best: true  # 保存最佳模型
+  save_last_n: 5  # 保留最近5个checkpoint
+  directory: "./checkpoints"
+
+  # 保存策略
+  save_policy:
+    metrics:
+      - name: "validation_loss"
+        mode: "min"
+      - name: "accuracy"
+        mode: "max"
+    primary_metric: "validation_loss"
+
+# ============================================================================
+# 告警配置
+# ============================================================================
+alerts:
+  enabled: true
+
+  # 告警渠道
+  channels:
+    - type: "log"
+      enabled: true
+    - type: "webhook"
+      enabled: false
+      url: "https://hooks.slack.com/services/XXX"
+    - type: "email"
+      enabled: false
+      smtp_server: "smtp.gmail.com"
+      smtp_port: 587
+      username: "alerts@quantumarch.ai"
+      recipients: ["admin@quantumarch.ai"]
+
+  # 告警规则
+  rules:
+    critical:
+      - name: "LossExplosion"
+        expr: "training_loss > 10 * avg_over_time(training_loss[1h])"
+        duration: "5m"
+        annotations:
+          summary: "训练损失爆炸，可能需要回滚"
+
+      - name: "UnitarityViolation"
+        expr: "unitarity_violation > 1e-4"
+        duration: "1m"
+        annotations:
+          summary: "酉约束严重违背，需要重新参数化"
+
+    warning:
+      - name: "LowGPUUtilization"
+        expr: "gpu_utilization < 50"
+        duration: "10m"
+        annotations:
+          summary: "GPU利用率过低，考虑增加batch_size"
+
+      - name: "BudgetWarning"
+        expr: "daily_cost > 0.9 * daily_budget"
+        duration: "1m"
+        annotations:
+          summary: "预算即将超支，请检查"
+
+    info:
+      - name: "ShadowTestPromotion"
+        expr: 'shadow_test_improvement > 0.03'
+        annotations:
+          summary: "影子测试模型表现良好，考虑晋升"
+
+# ============================================================================
+# 超参数调优配置
+# ============================================================================
+hyperparameter_tuning:
+  enabled: true
+  method: "bayesian"  # random, grid, bayesian
+
+  # 贝叶斯优化配置
+  bayesian_optimization:
+    init_points: 5  # 初始采样点
+    n_iterations: 20  # 迭代次数
+    acquisition: "ei"  # Expected Improvement
+
+  # 搜索空间
+  search_space:
+    qsa_topk_ratio:
+      type: "float"
+      bounds: [0.05, 0.3]
+    qci_tau_low:
+      type: "float"
+      bounds: [0.3, 1.0]
+    qci_tau_high:
+      type: "float"
+      bounds: [1.5, 3.0]
+    qgd_mod_lr:
+      type: "loguniform"
+      bounds: [1e-6, 1e-2]
+    qgd_phase_lr:
+      type: "loguniform"
+      bounds: [1e-5, 1e-1]
+    batch_size:
+      type: "categorical"
+      choices: [32, 64, 128, 256]
+
+  # 评估配置
+  evaluation:
+    num_epochs: 5  # 快速测试轮数
+    metric: "validation_loss"
+    direction: "minimize"
+
+# ============================================================================
+# 日志配置
+# ============================================================================
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file:
+    enabled: true
+    path: "./logs/optimization.log"
+    max_size: "100MB"
+    backup_count: 10
+  console:
+    enabled: true
+    level: "INFO"
+
+# ============================================================================
+# 实验追踪配置
+# ============================================================================
+experiment_tracking:
+  enabled: true
+  backend: "mlflow"  # mlflow, wandb, tensorboard
+
+  # MLflow配置
+  mlflow:
+    tracking_uri: "http://localhost:5000"
+    experiment_name: "quantum_arch_auto_optimization"
+    artifact_location: "./mlruns/artifacts"
+
+  # Wandb配置
+  wandb:
+    enabled: false
+    project: "quantum-arch"
+    entity: "quantumarch-team"
+
+  # TensorBoard配置
+  tensorboard:
+    enabled: true
+    log_dir: "./runs"
+    update_freq: 100
+
+# ============================================================================
+# 实验管理配置
+# ============================================================================
+experiments:
+  default_experiment:
+    name: "auto_optimization_v1"
+    description: "自动化优化系统v1.0实验"
+    tags: ["auto", "optimization", "production"]
+    parameters:
+      model_size: "medium"
+      dataset: "benchmark"
+
+  # 实验版本控制
+  versioning:
+    enabled: true
+    git_commit: true
+    code_snapshot: true
+    config_snapshot: true
+
+# ============================================================================
+# 高级配置
+# ============================================================================
+advanced:
+  # 并行化
+  parallelism:
+    num_workers: 4  # 数据加载工作线程
+    prefetch_factor: 2
+
+  # 混合精度训练
+  mixed_precision:
+    enabled: true
+    amp_level: "O1"  # O0, O1, O2, O3
+
+  # 梯度累积
+  gradient_accumulation:
+    enabled: false
+    steps: 4
+
+  # 分布式训练
+  distributed:
+    enabled: false
+    backend: "nccl"
+    world_size: 1
+
+  # 模型并行
+  model_parallel:
+    enabled: false
+    pipeline_parallel: false
+
+# ============================================================================
+# 开发模式配置
+# ============================================================================
+development:
+  mode: "production"  # development, staging, production
+
+  # 开发模式覆盖
+  development_overrides:
+    shadow_ratio: 0.2  # 增加影子测试比例
+    save_interval: 100  # 更频繁保存
+    log_level: "DEBUG"
+    budget_exceeded_action: "warn"  # 不真正停止

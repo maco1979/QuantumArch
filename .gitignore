@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Demo output
+demo_output.txt
+demo_run.txt
+demo_err.txt
+
+# Logs
+*.log
+
+# WorkBuddy
+.workbuddy/
+
+# Byte-compiled pyc in subfolders
+**/*.pyc

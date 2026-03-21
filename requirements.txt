@@ -1,0 +1,23 @@
+# 量子架构 (QuantumArch) - Python 依赖
+
+# 深度学习
+torch>=2.0.0
+numpy>=1.24.0
+
+# 监控与指标
+prometheus-client>=0.17.0
+pynvml>=11.0.0
+
+# 配置管理
+pyyaml>=6.0
+
+# 实验追踪（可选）
+# mlflow>=2.0.0
+# wandb>=0.15.0
+# tensorboard>=2.13.0
+
+# 超参优化（可选）
+# optuna>=3.0.0
+
+# 测试
+pytest>=7.0.0

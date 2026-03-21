@@ -1,0 +1,6 @@
+# 论文学习系统依赖
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+arxiv>=3.2.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
