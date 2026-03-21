@@ -131,9 +131,14 @@ class QuantumBlock(nn.Module):
         if 'qsa_topk_ratio' in kwargs:
             self.qsa.topk_ratio = kwargs['qsa_topk_ratio']
         if 'qci_tau_low' in kwargs and self.qci is not None:
+            # 获取当前 tau_high（可能在 threshold 子模块或直接属性上）
+            if self.qci.threshold is not None:
+                current_tau_high = self.qci.threshold.tau_high.item()
+            else:
+                current_tau_high = self.qci.tau_high.item()
             self.qci.update_thresholds(
                 tau_low=kwargs['qci_tau_low'],
-                tau_high=kwargs.get('qci_tau_high', self.qci.tau_high),
+                tau_high=kwargs.get('qci_tau_high', current_tau_high),
             )
 
     def extra_repr(self) -> str:

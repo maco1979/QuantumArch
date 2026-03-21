@@ -1,0 +1,27 @@
+[tool.pyright]
+include = ["quantum_core", "tests", "benchmark", "optimization_system"]
+exclude = [
+    "**/__pycache__",
+    "**/node_modules",
+    "**/.pytest_cache",
+    "experiments",
+    "paper_system",
+]
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportOptionalMemberAccess = "warning"
+reportGeneralTypeIssues = "warning"
+pythonVersion = "3.9"
+pythonPlatform = "Linux"
+typeCheckingMode = "basic"  # 对 PyTorch 使用 basic 模式
+stubPath = ""
+
+[tool.black]
+line-length = 100
+target-version = ['py39']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3

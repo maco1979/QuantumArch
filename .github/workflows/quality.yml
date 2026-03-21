@@ -1,0 +1,144 @@
+name: 代码质量检查
+
+on:
+  pull_request:
+    branches: [ main, dev ]
+  push:
+    branches: [ main, dev ]
+
+jobs:
+  lint:
+    name: 代码规范检查
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: 设置 Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 安装依赖
+      run: |
+        pip install flake8 pylint black isort
+
+    - name: Flake8 检查
+      run: |
+        flake8 quantum_core tests --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 quantum_core tests --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+
+    - name: Pylint 检查
+      run: |
+        pylint quantum_core --exit-zero --output-format=text
+      continue-on-error: true
+
+    - name: Black 格式检查
+      run: |
+        black --check quantum_core tests
+
+    - name: isort 检查
+      run: |
+        isort --check-only quantum_core tests
+
+  test:
+    name: 单元测试
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10']
+        torch-version: ['2.0.0', '2.1.0']
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: 设置 Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: 安装 PyTorch ${{ matrix.torch-version }}
+      run: |
+        pip install torch==${{ matrix.torch-version }} --index-url https://download.pytorch.org/whl/cpu
+
+    - name: 安装依赖
+      run: |
+        pip install pytest pytest-cov pytest-benchmark numpy pyyaml
+
+    - name: 运行测试
+      run: |
+        pytest tests/ -v --cov=quantum_core --cov-report=xml --cov-report=term-missing -m "not gpu and not requires_cuda"
+
+    - name: 上传覆盖率到 Codecov
+      uses: codecov/codecov-action@v3
+      if: matrix.python-version == '3.9' && matrix.torch-version == '2.0.0'
+      with:
+        files: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  type-check:
+    name: 类型检查
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: 设置 Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 安装 Pyright
+      run: |
+        npm install -g pyright
+
+    - name: 安装 PyTorch
+      run: |
+        pip install torch>=2.0.0 numpy
+
+    - name: 运行 Pyright
+      run: |
+        pyright quantum_core tests
+
+  security:
+    name: 安全检查
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: 设置 Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 安装安全工具
+      run: |
+        pip install bandit safety
+
+    - name: Bandit 安全扫描
+      run: |
+        bandit -r quantum_core -f screen -v
+
+    - name: Safety 检查
+      run: |
+        pip install -r requirements.txt
+        safety check --json || true
+
+  performance:
+    name: 性能基准测试
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: 设置 Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 安装依赖
+      run: |
+        pip install torch>=2.0.0 pytest pytest-benchmark numpy
+
+    - name: 运行基准测试
+      run: |
+        pytest benchmark/ -v --benchmark-only
+      continue-on-error: true

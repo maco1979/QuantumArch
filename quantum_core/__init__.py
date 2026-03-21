@@ -37,9 +37,14 @@ from .normalization import ComplexLayerNorm, ComplexBatchNorm
 from .unitary import CayleyLinear, CayleyLinearSimple
 from .embedding import ComplexEmbedding, QuantumPositionalEncoding, LearnedPositionalEncoding
 from .attention import QuantumSuperpositionAttention, PhaseModulation
-from .entanglement import QuantumEntanglementLayer, EntanglementGate, AdaptiveEntanglementGate
-from .collapse import QuantumCollapseInference, POVMProjector
-from .ffn import QuantumFFN
+from .entanglement import (
+    QuantumEntanglementLayer, EntanglementGate, AdaptiveEntanglementGate,
+    SchmidtEntanglementGate, SchmidtEntanglementGateV2,
+    QuantumFourierTransform, UnitaryCoupling,
+    concurrence, entanglement_entropy,
+)
+from .collapse import QuantumCollapseInference, POVMProjector, AdaptiveThreshold
+from .ffn import QuantumFFN, GatedQuantumFFN, QuantumGate, ComplexSigmoid, ComplexLinear, ComplexBias
 from .quantum_block import QuantumBlock
 from .model import QuantumArch
 from .optimizer import QGD
@@ -62,8 +67,11 @@ __all__ = [
     # 核心组件
     'QuantumSuperpositionAttention', 'PhaseModulation',
     'QuantumEntanglementLayer', 'EntanglementGate', 'AdaptiveEntanglementGate',
-    'QuantumCollapseInference', 'POVMProjector',
-    'QuantumFFN', 'QuantumBlock',
+    'SchmidtEntanglementGate', 'SchmidtEntanglementGateV2',
+    'QuantumFourierTransform', 'UnitaryCoupling',
+    'concurrence', 'entanglement_entropy',
+    'QuantumCollapseInference', 'POVMProjector', 'AdaptiveThreshold',
+    'QuantumFFN', 'GatedQuantumFFN', 'QuantumGate', 'ComplexSigmoid', 'ComplexLinear', 'ComplexBias', 'QuantumBlock',
     # 完整模型和优化器
     'QuantumArch', 'QGD',
 ]

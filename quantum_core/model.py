@@ -110,6 +110,9 @@ class QuantumArch(nn.Module):
         """初始化非 Cayley 参数的权重。"""
         for module in self.modules():
             if isinstance(module, nn.Linear):
+                # 跳过 ComplexLinear 内部的 nn.Linear（它们有自己的初始化）
+                if hasattr(module, '_complex_linear_parent'):
+                    continue
                 if module.weight.dtype in (torch.complex64, torch.complex128):
                     nn.init.normal_(module.weight.real, std=0.02)
                     nn.init.normal_(module.weight.imag, std=0.02)
@@ -235,10 +238,12 @@ class QuantumArch(nn.Module):
                     key = f'block{i}_{name}'
                     report[key] = layer.get_unitarity_violation().item()
 
-            # 检查 FFN 中的 W_down（仅方阵）
+            # 检查 FFN 中的 W_down（通过 ComplexLinear 包装器）
             layer = getattr(block.ffn_q, 'W_down', None)
-            if hasattr(layer, 'is_square') and layer.is_square:
-                report[f'block{i}_ffn_down'] = layer.get_unitarity_violation().item()
+            if layer is not None:
+                # ComplexLinear 有 is_cayley 属性
+                if hasattr(layer, 'is_cayley') and layer.is_cayley:
+                    report[f'block{i}_ffn_down'] = layer.get_unitarity_violation()
 
         return report
 

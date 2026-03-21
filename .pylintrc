@@ -1,0 +1,34 @@
+[MASTER]
+extension-pkg-whitelist=numpy,torch
+
+[FORMAT]
+indent-string='    '
+max-line-length=100
+
+[MESSAGES CONTROL]
+disable=
+    C0103,  # invalid-name (允许某些简化命名)
+    C0114,  # missing-module-docstring
+    C0115,  # missing-class-docstring
+    C0116,  # missing-function-docstring
+    R0902,  # too-many-instance-attributes
+    R0903,  # too-few-public-methods
+    R0913,  # too-many-arguments
+    R0914,  # too-many-locals
+    R0915,  # too-many-statements
+    W0212,  # protected-access
+    W0237,  # arguments-renamed
+    E1102,  # no-member (PyTorch 常有误报)
+
+[DESIGN]
+max-args=7
+max-locals=15
+max-returns=6
+max-branches=12
+max-statements=50
+
+[SIMILARITIES]
+min-similarity-lines=4
+ignore-comments=yes
+ignore-docstrings=yes
+ignore-imports=no

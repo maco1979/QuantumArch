@@ -37,3 +37,9 @@ demo_err.txt
 
 # Byte-compiled pyc in subfolders
 **/*.pyc
+
+# Test/coverage artifacts
+.coverage
+coverage.xml
+test_output.txt
+htmlcov/
