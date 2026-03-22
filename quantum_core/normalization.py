@@ -38,9 +38,10 @@ class ComplexLayerNorm(nn.Module):
     - 复数仿射变换 γ 可学习模长缩放和相位旋转
 
     Args:
-        normalized_shape: 归一化的特征维度大小（复数维度 d）
+        normalized_shape: 归一化的特征维度大小（复数维度 d），必须 > 0
         eps: 数值稳定 epsilon
         elementwise_affine: 是否使用可学习的复数仿射参数
+        dim: normalized_shape 的别名（二选一传入）
     """
 
     def __init__(
@@ -54,6 +55,11 @@ class ComplexLayerNorm(nn.Module):
         # 支持 dim 作为 normalized_shape 的别名（兼容 test_full_suite）
         if dim is not None:
             normalized_shape = dim
+        if normalized_shape <= 0:
+            raise ValueError(
+                f"normalized_shape 必须为正整数，收到: {normalized_shape}。"
+                "请传入 dim=your_dim 或 normalized_shape=your_dim。"
+            )
         self.normalized_shape = normalized_shape
         self.eps = eps
         self.elementwise_affine = elementwise_affine
@@ -71,6 +77,18 @@ class ComplexLayerNorm(nn.Module):
         else:
             self.register_parameter('gamma', None)
             self.register_parameter('beta', None)
+
+    def reset_parameters(self):
+        """重置可学习仿射参数到初始值。
+
+        γ 重置为 1+0i，β 重置为 0+0i。
+        可用于迁移学习时重新初始化归一化层。
+        """
+        if self.elementwise_affine:
+            nn.init.ones_(self.gamma.real)
+            nn.init.zeros_(self.gamma.imag)
+            nn.init.zeros_(self.beta.real)
+            nn.init.zeros_(self.beta.imag)
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
         """
