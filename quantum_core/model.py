@@ -247,6 +247,82 @@ class QuantumArch(nn.Module):
 
         return report
 
+    def count_parameters(self) -> Dict[str, int]:
+        """统计模型各部分参数量。
+
+        分别统计复数参数（按实数等效数量计算）和实数参数，
+        以及总量，方便与 Transformer 基线对比。
+
+        Returns:
+            dict 包含:
+                - 'total_real_equiv': 所有参数折算为实数的总数量
+                - 'complex_params': 复数参数数量（每个 complex64 = 2 个实数）
+                - 'real_params': 实数参数数量
+                - 'embedding_params': 嵌入层参数（实数等效）
+                - 'block_params': 量子块参数（实数等效）
+        """
+        embedding_params = 0
+        block_params = 0
+        real_params = 0
+        complex_params = 0
+
+        for name, p in self.named_parameters():
+            n = p.numel()
+            if p.is_complex():
+                equiv = n * 2  # complex64 = 2 × float32
+                complex_params += n
+            else:
+                equiv = n
+                real_params += n
+
+            if 'embedding' in name or 'pos_encoding' in name:
+                embedding_params += equiv
+            elif 'blocks' in name:
+                block_params += equiv
+
+        total = sum(
+            p.numel() * (2 if p.is_complex() else 1)
+            for p in self.parameters()
+        )
+
+        return {
+            'total_real_equiv': total,
+            'complex_params': complex_params,
+            'real_params': real_params,
+            'embedding_params': embedding_params,
+            'block_params': block_params,
+        }
+
+    def complexity_summary(self, seq_len: int = 512) -> str:
+        """生成模型复杂度摘要字符串。
+
+        Args:
+            seq_len: 假定序列长度
+        Returns:
+            格式化的多行摘要
+        """
+        param_info = self.count_parameters()
+        total_m = param_info['total_real_equiv'] / 1e6
+
+        lines = [
+            f"=== QuantumArch 复杂度摘要 ===",
+            f"  维度: dim={self.dim}, 层数={self.num_layers}, 输出={self.output_dim}",
+            f"  参数量（实数等效）: {total_m:.2f}M",
+            f"    ├ 复数参数: {param_info['complex_params'] / 1e6:.2f}M 个",
+            f"    ├ 实数参数: {param_info['real_params'] / 1e6:.2f}M 个",
+            f"    ├ 嵌入层: {param_info['embedding_params'] / 1e6:.2f}M",
+            f"    └ 量子块: {param_info['block_params'] / 1e6:.2f}M",
+            f"  序列长度: {seq_len}",
+        ]
+
+        if self.blocks:
+            report = self.blocks[0].get_complexity_report(seq_len)
+            lines.append("  单块复杂度（估算）:")
+            for k, v in report.items():
+                lines.append(f"    {k}: {v}")
+
+        return "\n".join(lines)
+
     def extra_repr(self) -> str:
         return (
             f'dim={self.dim}, layers={self.num_layers}, '
