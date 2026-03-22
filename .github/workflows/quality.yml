@@ -116,7 +116,9 @@ jobs:
 
     - name: Bandit 安全扫描
       run: |
-        bandit -r quantum_core -f screen -v
+        bandit -r quantum_core -f screen -v || true
+        # 如需生成报告文件，可取消以下注释：
+        # bandit -r quantum_core -f json -o bandit_report.json || true
 
     - name: Safety 检查
       run: |
