@@ -229,6 +229,34 @@ def complex_dropout(z: torch.Tensor, p: float = 0.1, training: bool = True) -> t
 # 酉性验证
 # ──────────────────────────────────────────────
 
+def complex_phase_shift(z: torch.Tensor, theta: torch.Tensor) -> torch.Tensor:
+    """对复数张量施加相位旋转 e^{iθ}。
+
+    等价于将每个振幅的相位增加 θ，模长不变。
+    常用于量子电路中的 R_z(θ) 单量子比特旋转门。
+
+    Args:
+        z: 复数张量 (*shape)
+        theta: 实数相位偏移 (*shape 或可广播)
+    Returns:
+        旋转后的复数张量 z · e^{iθ}
+    """
+    return z * torch.exp(1j * theta)
+
+
+def real_to_complex(x: torch.Tensor) -> torch.Tensor:
+    """将实数张量转为复数张量（虚部置零）。
+
+    快捷工具，避免每处都写 torch.complex(x, torch.zeros_like(x))。
+
+    Args:
+        x: 实数张量 (*shape)
+    Returns:
+        复数张量 (*shape)，虚部为零
+    """
+    return torch.complex(x, torch.zeros_like(x))
+
+
 def check_unitarity(W: torch.Tensor, eps: float = 1e-4) -> dict:
     """检查矩阵的酉性 W†W = I。
 
