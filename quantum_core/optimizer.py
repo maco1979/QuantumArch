@@ -460,6 +460,50 @@ class QGD(Optimizer):
         """
         super().add_param_group(param_group)
 
+    def get_stats(self) -> dict:
+        """返回当前步数及各参数组的梯度统计信息。
+
+        用于调试和优化系统监控，无需额外计算开销。
+
+        Returns:
+            dict 包含:
+                - 'global_step': 全局最大步数
+                - 'complex_params': 普通复数参数数量
+                - 'cayley_params': Cayley 参数数量
+                - 'real_params': 实数参数数量
+                - 'grad_norm_complex': 复数参数的梯度 L2 范数（最近一步）
+        """
+        global_step = 0
+        n_complex = n_cayley = n_real = 0
+        grad_norm_sq = 0.0
+
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                state = self.state.get(p, {})
+                step = state.get('step', 0)
+                global_step = max(global_step, step)
+
+                is_complex = p.dtype in (torch.complex64, torch.complex128)
+                is_cayley = _is_cayley_param(self._get_param_name(p))
+
+                if is_cayley:
+                    n_cayley += 1
+                elif is_complex:
+                    n_complex += 1
+                    grad_norm_sq += torch.view_as_real(p.grad).float().pow(2).sum().item()
+                else:
+                    n_real += 1
+
+        return {
+            'global_step': global_step,
+            'complex_params': n_complex,
+            'cayley_params': n_cayley,
+            'real_params': n_real,
+            'grad_norm_complex': float(grad_norm_sq ** 0.5),
+        }
+
     @classmethod
     def from_model(
         cls,
