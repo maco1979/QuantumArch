@@ -37,12 +37,8 @@ class MockQuantumArchLegacy(nn.Module):
         self.num_layers = num_layers
         self.qsa = nn.MultiheadAttention(dim, num_heads=8)
         self.qel = nn.Linear(dim, dim)
-        self.qci = nn.Sequential(
-            nn.Linear(dim, dim // 2), nn.ReLU(), nn.Linear(dim // 2, dim)
-        )
-        self.ffn = nn.Sequential(
-            nn.Linear(dim, dim * 4), nn.ReLU(), nn.Linear(dim * 4, dim)
-        )
+        self.qci = nn.Sequential(nn.Linear(dim, dim // 2), nn.ReLU(), nn.Linear(dim // 2, dim))
+        self.ffn = nn.Sequential(nn.Linear(dim, dim * 4), nn.ReLU(), nn.Linear(dim * 4, dim))
         self.qsa_topk_ratio = 0.1
         self.qci_tau_low = 0.5
         self.qci_tau_high = 1.5
@@ -64,17 +60,19 @@ class MockQuantumArchLegacy(nn.Module):
                 x = x + self.qci(x)
         x = x + self.ffn(x)
         return {
-            'output': x, 'qsa_time': qsa_time,
-            'qci_early_exit': qci_early_exit, 'entropy': entropy,
+            "output": x,
+            "qsa_time": qsa_time,
+            "qci_early_exit": qci_early_exit,
+            "entropy": entropy,
         }
 
     def update_parameters(self, **kwargs):
-        if 'qsa_topk_ratio' in kwargs:
-            self.qsa_topk_ratio = kwargs['qsa_topk_ratio']
-        if 'qci_tau_low' in kwargs:
-            self.qci_tau_low = kwargs['qci_tau_low']
-        if 'qci_tau_high' in kwargs:
-            self.qci_tau_high = kwargs['qci_tau_high']
+        if "qsa_topk_ratio" in kwargs:
+            self.qsa_topk_ratio = kwargs["qsa_topk_ratio"]
+        if "qci_tau_low" in kwargs:
+            self.qci_tau_low = kwargs["qci_tau_low"]
+        if "qci_tau_high" in kwargs:
+            self.qci_tau_high = kwargs["qci_tau_high"]
 
 
 def create_model(config: dict, use_legacy: bool = False):
@@ -90,16 +88,16 @@ def create_model(config: dict, use_legacy: bool = False):
         return MockQuantumArchLegacy()
 
     # 从配置中读取超参数
-    model_cfg = config.get('model', {})
-    dim = model_cfg.get('dim', 256)
-    num_layers = model_cfg.get('num_layers', 4)
-    num_heads = model_cfg.get('num_heads', 8)
-    ffn_dim = model_cfg.get('ffn_dim', None)
-    topk_ratio = config.get('qsa', {}).get('adaptive', {}).get('topk_ratio', 0.1)
-    collapse_cfg = config.get('qci', {}).get('collapse', {})
-    tau_low = collapse_cfg.get('tau_low', 0.5)
-    tau_high = collapse_cfg.get('tau_high', 1.5)
-    dropout = config.get('training', {}).get('dropout', 0.0)
+    model_cfg = config.get("model", {})
+    dim = model_cfg.get("dim", 256)
+    num_layers = model_cfg.get("num_layers", 4)
+    num_heads = model_cfg.get("num_heads", 8)
+    ffn_dim = model_cfg.get("ffn_dim", None)
+    topk_ratio = config.get("qsa", {}).get("adaptive", {}).get("topk_ratio", 0.1)
+    collapse_cfg = config.get("qci", {}).get("collapse", {})
+    tau_low = collapse_cfg.get("tau_low", 0.5)
+    tau_high = collapse_cfg.get("tau_high", 1.5)
+    dropout = config.get("training", {}).get("dropout", 0.0)
 
     return QuantumArch(
         dim=dim,
@@ -111,7 +109,7 @@ def create_model(config: dict, use_legacy: bool = False):
         tau_low=tau_low,
         tau_high=tau_high,
         dropout=dropout,
-        qsa_mode='topk',
+        qsa_mode="topk",
         direct_input=True,
     )
 
@@ -119,9 +117,11 @@ def create_model(config: dict, use_legacy: bool = False):
 class OptimizedTrainingPipeline:
     """集成优化系统的训练管线"""
 
-    def __init__(self, config_path: str = "./optimization_system/config.yaml", use_legacy: bool = False):
+    def __init__(
+        self, config_path: str = "./optimization_system/config.yaml", use_legacy: bool = False
+    ):
         # 加载配置
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
 
         self.use_legacy = use_legacy
@@ -148,12 +148,12 @@ class OptimizedTrainingPipeline:
 
         # 初始化Prometheus指标
         self.metrics_exporter = QuantumArchMetrics(
-            port=self.config['monitoring']['prometheus']['port']
+            port=self.config["monitoring"]["prometheus"]["port"]
         )
 
         # 训练状态
         self.step_count = 0
-        self.best_validation_loss = float('inf')
+        self.best_validation_loss = float("inf")
 
         logger.info("优化训练管线初始化完成")
 
@@ -163,17 +163,17 @@ class OptimizedTrainingPipeline:
 
         # 前向传播
         self.optimizer.zero_grad()
-        inputs = batch['inputs']
-        targets = batch['targets']
+        inputs = batch["inputs"]
+        targets = batch["targets"]
 
         # QuantumArch 接受 dict 输入以兼容接口
-        model_input = {'inputs': inputs}
+        model_input = {"inputs": inputs}
         outputs_dict = self.model(model_input, training=self.model.training)
-        outputs = outputs_dict['output']
+        outputs = outputs_dict["output"]
 
         # 确保输出与目标形状一致
         if outputs.shape != targets.shape:
-            targets = targets[..., :outputs.shape[-1]]
+            targets = targets[..., : outputs.shape[-1]]
 
         # 计算损失
         loss = self.criterion(outputs, targets)
@@ -196,7 +196,7 @@ class OptimizedTrainingPipeline:
             for p in self.model.parameters():
                 if p.grad is not None:
                     grad_norm += p.grad.norm().item() ** 2
-            grad_norm = grad_norm ** 0.5
+            grad_norm = grad_norm**0.5
 
             # GPU信息
             if torch.cuda.is_available():
@@ -207,26 +207,26 @@ class OptimizedTrainingPipeline:
                 gpu_util = 0.0
 
             # QCI早退率
-            qci_early_exit = 1.0 if outputs_dict['qci_early_exit'] else 0.0
+            qci_early_exit = 1.0 if outputs_dict["qci_early_exit"] else 0.0
 
             # 酉性违背度量（真实模型）
             unitarity_violation = 0.0
-            if not self.use_legacy and hasattr(self.model, 'get_unitarity_report'):
+            if not self.use_legacy and hasattr(self.model, "get_unitarity_report"):
                 report = self.model.get_unitarity_report()
                 if report:
                     unitarity_violation = max(report.values())
 
         return {
-            'loss': loss.item(),
-            'accuracy': accuracy,
-            'grad_norm': grad_norm,
-            'batch_time': batch_time,
-            'qsa_time': outputs_dict['qsa_time'],
-            'qci_early_exit': qci_early_exit,
-            'qci_entropy': outputs_dict['entropy'],
-            'gpu_memory': gpu_memory,
-            'gpu_util': gpu_util,
-            'unitarity_violation': unitarity_violation,
+            "loss": loss.item(),
+            "accuracy": accuracy,
+            "grad_norm": grad_norm,
+            "batch_time": batch_time,
+            "qsa_time": outputs_dict["qsa_time"],
+            "qci_early_exit": qci_early_exit,
+            "qci_entropy": outputs_dict["entropy"],
+            "gpu_memory": gpu_memory,
+            "gpu_util": gpu_util,
+            "unitarity_violation": unitarity_violation,
         }
 
     def train_epoch(self, train_loader: DataLoader, epoch: int):
@@ -242,39 +242,41 @@ class OptimizedTrainingPipeline:
 
             # 执行训练步
             step_metrics = self.train_step(batch)
-            total_loss += step_metrics['loss']
+            total_loss += step_metrics["loss"]
 
             # 构造性能指标对象
             performance_metrics = PerformanceMetrics(
-                loss=step_metrics['loss'],
-                accuracy=step_metrics['accuracy'],
-                grad_norm=step_metrics['grad_norm'],
-                batch_time=step_metrics['batch_time'],
-                gpu_utilization=step_metrics['gpu_util'],
-                gpu_memory_used=step_metrics['gpu_memory'],
+                loss=step_metrics["loss"],
+                accuracy=step_metrics["accuracy"],
+                grad_norm=step_metrics["grad_norm"],
+                batch_time=step_metrics["batch_time"],
+                gpu_utilization=step_metrics["gpu_util"],
+                gpu_memory_used=step_metrics["gpu_memory"],
                 qsa_topk_ratio=self.model.qsa_topk_ratio,
-                qci_early_exit_rate=step_metrics['qci_early_exit'],
+                qci_early_exit_rate=step_metrics["qci_early_exit"],
                 qgd_mod_lr=1e-4,
                 qgd_phase_lr=1e-3,
-                unitarity_violation=step_metrics.get('unitarity_violation', 1e-8),
+                unitarity_violation=step_metrics.get("unitarity_violation", 1e-8),
             )
 
             # 调用优化系统
             self.optimization_system.on_training_step(performance_metrics)
 
             # 更新Prometheus指标
-            self.metrics_exporter.update_metrics({
-                'training_loss': step_metrics['loss'],
-                'accuracy': step_metrics['accuracy'],
-                'qsa_topk_ratio': self.model.qsa_topk_ratio,
-                'qci_early_exit_rate': step_metrics['qci_early_exit'],
-                'qci_avg_entropy': step_metrics['qci_entropy'],
-                'batch_processing_time': step_metrics['batch_time'],
-                'step_time': step_metrics['batch_time'],
-                'gpu_memory_used': step_metrics['gpu_memory'],
-                'gpu_utilization': step_metrics['gpu_util'],
-                'step_increment': 1,
-            })
+            self.metrics_exporter.update_metrics(
+                {
+                    "training_loss": step_metrics["loss"],
+                    "accuracy": step_metrics["accuracy"],
+                    "qsa_topk_ratio": self.model.qsa_topk_ratio,
+                    "qci_early_exit_rate": step_metrics["qci_early_exit"],
+                    "qci_avg_entropy": step_metrics["qci_entropy"],
+                    "batch_processing_time": step_metrics["batch_time"],
+                    "step_time": step_metrics["batch_time"],
+                    "gpu_memory_used": step_metrics["gpu_memory"],
+                    "gpu_utilization": step_metrics["gpu_util"],
+                    "step_increment": 1,
+                }
+            )
 
             # 日志输出
             if batch_idx % 10 == 0:
@@ -294,9 +296,9 @@ class OptimizedTrainingPipeline:
 
         # 更新QCI阈值（来自优化系统）
         batch_stats = {
-            'avg_entropy': avg_loss,
-            'entropy_std': 0.1,  # 简化
-            'early_exit_rate': 0.3,  # 简化
+            "avg_entropy": avg_loss,
+            "entropy_std": 0.1,  # 简化
+            "early_exit_rate": 0.3,  # 简化
         }
         tau_low, tau_high = self.optimization_system.qci_learner.forward(batch_stats)
         self.model.update_parameters(qci_tau_low=tau_low, qci_tau_high=tau_high)
@@ -312,15 +314,15 @@ class OptimizedTrainingPipeline:
 
         with torch.no_grad():
             for batch in val_loader:
-                inputs = batch['inputs']
-                targets = batch['targets']
+                inputs = batch["inputs"]
+                targets = batch["targets"]
 
-                model_input = {'inputs': inputs}
+                model_input = {"inputs": inputs}
                 outputs_dict = self.model(model_input, training=False)
-                outputs = outputs_dict['output']
+                outputs = outputs_dict["output"]
 
                 if outputs.shape != targets.shape:
-                    targets = targets[..., :outputs.shape[-1]]
+                    targets = targets[..., : outputs.shape[-1]]
 
                 loss = self.criterion(outputs, targets)
                 total_loss += loss.item()
@@ -329,17 +331,21 @@ class OptimizedTrainingPipeline:
         logger.info(f"验证损失: {avg_loss:.4f}")
 
         # 酉性报告（真实模型）
-        if not self.use_legacy and hasattr(self.model, 'get_unitarity_report'):
+        if not self.use_legacy and hasattr(self.model, "get_unitarity_report"):
             report = self.model.get_unitarity_report()
             if report:
                 max_violation = max(report.values())
                 avg_violation = sum(report.values()) / len(report)
-                logger.info(f"酉性报告: max_violation={max_violation:.2e}, avg_violation={avg_violation:.2e}")
+                logger.info(
+                    f"酉性报告: max_violation={max_violation:.2e}, avg_violation={avg_violation:.2e}"
+                )
 
         # 更新Prometheus
-        self.metrics_exporter.update_metrics({
-            'validation_loss': avg_loss,
-        })
+        self.metrics_exporter.update_metrics(
+            {
+                "validation_loss": avg_loss,
+            }
+        )
 
         return avg_loss
 
@@ -374,9 +380,9 @@ class OptimizedTrainingPipeline:
                 estimated_remaining_steps=estimated_remaining
             )
 
-            if budget_status['action'] != 'continue':
+            if budget_status["action"] != "continue":
                 logger.warning(f"预算状态: {budget_status}")
-                if budget_status['action'] == 'stop':
+                if budget_status["action"] == "stop":
                     logger.error("预算超支，停止训练")
                     break
 
@@ -385,22 +391,26 @@ class OptimizedTrainingPipeline:
 
     def save_checkpoint(self, name: str):
         """保存checkpoint"""
-        checkpoint_path = Path(self.config['checkpointing']['directory']) / f"{name}.pt"
+        checkpoint_path = Path(self.config["checkpointing"]["directory"]) / f"{name}.pt"
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
-        torch.save({
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'step_count': self.step_count,
-            'best_validation_loss': self.best_validation_loss,
-            'config': self.config,
-        }, checkpoint_path)
+        torch.save(
+            {
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "step_count": self.step_count,
+                "best_validation_loss": self.best_validation_loss,
+                "config": self.config,
+            },
+            checkpoint_path,
+        )
 
         logger.info(f"Checkpoint保存到: {checkpoint_path}")
 
 
 def create_mock_dataloader(batch_size: int = 32, num_samples: int = 1000):
     """创建模拟数据加载器"""
+
     class MockDataset(torch.utils.data.Dataset):
         def __init__(self, num_samples: int, dim: int = 512, seq_len: int = 128):
             self.num_samples = num_samples
@@ -413,7 +423,7 @@ def create_mock_dataloader(batch_size: int = 32, num_samples: int = 1000):
         def __getitem__(self, idx):
             inputs = torch.randn(self.seq_len, self.dim)
             targets = torch.randn(self.seq_len, self.dim)
-            return {'inputs': inputs, 'targets': targets}
+            return {"inputs": inputs, "targets": targets}
 
     dataset = MockDataset(num_samples)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -423,8 +433,7 @@ def create_mock_dataloader(batch_size: int = 32, num_samples: int = 1000):
 def main():
     """主函数 - 使用真实 QuantumArch 进行训练"""
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
     logger.info("=== 量子架构训练管线 ===")
@@ -437,14 +446,10 @@ def main():
     val_loader = create_mock_dataloader(batch_size=8, num_samples=20)
 
     # 开始训练
-    pipeline.train(
-        train_loader=train_loader,
-        val_loader=val_loader,
-        num_epochs=3
-    )
+    pipeline.train(train_loader=train_loader, val_loader=val_loader, num_epochs=3)
 
     logger.info("训练完成")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

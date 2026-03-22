@@ -12,6 +12,7 @@ from typing import Optional
 # 复数分解与合成
 # ──────────────────────────────────────────────
 
+
 def complex_to_polar(z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """将复数张量分解为模长和相位。
 
@@ -46,6 +47,7 @@ def separate_mod_phase(z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 # ──────────────────────────────────────────────
 # 量子态归一化
 # ──────────────────────────────────────────────
+
 
 def normalize_quantum_state(z: torch.Tensor, dim: int = -1, eps: float = 1e-8) -> torch.Tensor:
     """将复数张量归一化为量子态（单位向量）。
@@ -97,6 +99,7 @@ def born_normalize(z: torch.Tensor, dim: int = -1, eps: float = 1e-8) -> torch.T
 # 熵与不确定性
 # ──────────────────────────────────────────────
 
+
 def von_neumann_entropy(probs: torch.Tensor, dim: int = -1, eps: float = 1e-8) -> torch.Tensor:
     """计算冯诺依曼熵（Shannon熵形式，用于概率分布）。
 
@@ -142,11 +145,8 @@ def max_entropy(dim: int) -> float:
 # 复数内积与干涉
 # ──────────────────────────────────────────────
 
-def complex_inner_product(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    dim: int = -1
-) -> torch.Tensor:
+
+def complex_inner_product(a: torch.Tensor, b: torch.Tensor, dim: int = -1) -> torch.Tensor:
     """复数内积 ⟨a|b⟩ = Σ conj(a_i) * b_i
 
     Args:
@@ -182,6 +182,7 @@ def interference_score(
 # 复数 Softmax
 # ──────────────────────────────────────────────
 
+
 def complex_softmax(z: torch.Tensor, dim: int = -1, eps: float = 1e-8) -> torch.Tensor:
     """复数 Softmax。
 
@@ -209,6 +210,7 @@ def complex_softmax(z: torch.Tensor, dim: int = -1, eps: float = 1e-8) -> torch.
 # 复数 Dropout
 # ──────────────────────────────────────────────
 
+
 def complex_dropout(z: torch.Tensor, p: float = 0.1, training: bool = True) -> torch.Tensor:
     """复数 Dropout：同时对实部和虚部施加相同的 mask。
 
@@ -228,6 +230,7 @@ def complex_dropout(z: torch.Tensor, p: float = 0.1, training: bool = True) -> t
 # ──────────────────────────────────────────────
 # 酉性验证
 # ──────────────────────────────────────────────
+
 
 def complex_phase_shift(z: torch.Tensor, theta: torch.Tensor) -> torch.Tensor:
     """对复数张量施加相位旋转 e^{iθ}。
@@ -274,7 +277,7 @@ def check_unitarity(W: torch.Tensor, eps: float = 1e-4) -> dict:
     max_dev = deviation.abs().max().item()
 
     return {
-        'is_unitary': violation < eps,
-        'violation_norm': violation,
-        'max_deviation': max_dev,
+        "is_unitary": violation < eps,
+        "violation_norm": violation,
+        "max_deviation": max_dev,
     }

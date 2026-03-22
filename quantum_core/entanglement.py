@@ -49,6 +49,7 @@ from .unitary import CayleyLinear
 # 纠缠度量
 # ──────────────────────────────────────────────
 
+
 def concurrence(a: torch.Tensor, b: torch.Tensor, dim: int = -1) -> torch.Tensor:
     """计算两个量子态的纠缠度量（concurrence 近似）。
 
@@ -109,6 +110,7 @@ def entanglement_entropy(a: torch.Tensor, b: torch.Tensor, dim: int = -1) -> tor
 # Schmidt 纠缠操作
 # ──────────────────────────────────────────────
 
+
 class SchmidtEntanglementGate(nn.Module):
     """基于 Schmidt 分解的纠缠门。
 
@@ -147,13 +149,9 @@ class SchmidtEntanglementGate(nn.Module):
         self.proj_b = CayleyLinear(dim, self.rank, init_scale=init_scale)
 
         # 2r×2r 纠缠酉门 U_ent（在拼接的子空间上操作）
-        self.entangle_unitary = CayleyLinear(
-            2 * self.rank, 2 * self.rank, init_scale=init_scale
-        )
+        self.entangle_unitary = CayleyLinear(2 * self.rank, 2 * self.rank, init_scale=init_scale)
 
-    def forward(
-        self, a: torch.Tensor, b: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, a: torch.Tensor, b: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """对两个量子态应用纠缠操作。
 
         Args:
@@ -168,11 +166,11 @@ class SchmidtEntanglementGate(nn.Module):
 
         # 拼接并应用纠缠酉门
         combined = torch.cat([a_proj, b_proj], dim=-1)  # (..., 2r)
-        entangled = self.entangle_unitary(combined)      # (..., 2r)
+        entangled = self.entangle_unitary(combined)  # (..., 2r)
 
         # 拆分并投影回原空间
-        a_ent = entangled[..., :self.rank]  # (..., r)
-        b_ent = entangled[..., self.rank:]  # (..., r)
+        a_ent = entangled[..., : self.rank]  # (..., r)
+        b_ent = entangled[..., self.rank :]  # (..., r)
 
         a_out = self.proj_a.conj().T @ a_ent.unsqueeze(-1)  # 逆投影近似
         b_out = self.proj_b.conj().T @ b_ent.unsqueeze(-1)
@@ -223,9 +221,7 @@ class SchmidtEntanglementGateV2(nn.Module):
             self.W_bb = nn.Parameter(torch.randn(dim, dim, dtype=torch.complex64) * init_scale)
             self._use_cayley = False
 
-    def forward(
-        self, a: torch.Tensor, b: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, a: torch.Tensor, b: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """对两个量子态应用纠缠酉变换。
 
         Args:
@@ -244,8 +240,8 @@ class SchmidtEntanglementGateV2(nn.Module):
             b_part = a @ self.W_ab + b @ self.W_bb
             entangled = torch.cat([a_part, b_part], dim=-1)
 
-        a_out = entangled[..., :self.dim]
-        b_out = entangled[..., self.dim:]
+        a_out = entangled[..., : self.dim]
+        b_out = entangled[..., self.dim :]
 
         return a_out, b_out
 
@@ -253,6 +249,7 @@ class SchmidtEntanglementGateV2(nn.Module):
 # ──────────────────────────────────────────────
 # 自适应纠缠门
 # ──────────────────────────────────────────────
+
 
 class AdaptiveEntanglementGate(nn.Module):
     """自适应纠缠门：纠缠强度根据输入动态调整。
@@ -305,15 +302,22 @@ class AdaptiveEntanglementGate(nn.Module):
         # 计算纠缠相关特征
         a_mag_sq = a.abs().pow(2).mean(dim=-1, keepdim=True)  # (..., 1)
         b_mag_sq = b.abs().pow(2).mean(dim=-1, keepdim=True)  # (..., 1)
-        inner = complex_inner_product(a, b, dim=-1, )           # (...,) 复数
+        inner = complex_inner_product(
+            a,
+            b,
+            dim=-1,
+        )  # (...,) 复数
 
         # 拼接特征
-        feat = torch.cat([
-            a_mag_sq,
-            b_mag_sq,
-            inner.real.unsqueeze(-1),
-            inner.imag.unsqueeze(-1),
-        ], dim=-1)  # (..., 4)
+        feat = torch.cat(
+            [
+                a_mag_sq,
+                b_mag_sq,
+                inner.real.unsqueeze(-1),
+                inner.imag.unsqueeze(-1),
+            ],
+            dim=-1,
+        )  # (..., 4)
 
         # 动态计算纠缠强度
         strength = self.strength_mlp(feat) * self.theta_max  # (..., 1)
@@ -331,6 +335,7 @@ class AdaptiveEntanglementGate(nn.Module):
 # ──────────────────────────────────────────────
 # 量子傅里叶变换 (QFT)
 # ──────────────────────────────────────────────
+
 
 class QuantumFourierTransform(nn.Module):
     """量子傅里叶变换（QFT）模块。
@@ -392,7 +397,7 @@ class QuantumFourierTransform(nn.Module):
         for step in range(self.n_steps):
             # 在序列维度 dim=1 上做 FFT
             # norm='ortho' 保证酉性：F†F = I，即 QFT 操作是等距变换
-            x_qft = torch.fft.fft(result, dim=1, norm='ortho')
+            x_qft = torch.fft.fft(result, dim=1, norm="ortho")
 
             # 混合原始态和 QFT 态（部分纠缠）
             # α→1：保持原始局部表示；α→0：完全转换为全局频域表示
@@ -404,6 +409,7 @@ class QuantumFourierTransform(nn.Module):
 # ──────────────────────────────────────────────
 # 酉耦合（替代残差连接）
 # ──────────────────────────────────────────────
+
 
 class UnitaryCoupling(nn.Module):
     """酉耦合层：用纠缠耦合替代残差连接。
@@ -423,24 +429,22 @@ class UnitaryCoupling(nn.Module):
         coupling_type: 'full'（完整酉）或 'diagonal'（对角酉，高效）
     """
 
-    def __init__(self, dim: int, coupling_type: str = 'full', init_scale: float = 0.02):
+    def __init__(self, dim: int, coupling_type: str = "full", init_scale: float = 0.02):
         super().__init__()
         self.dim = dim
         self.coupling_type = coupling_type
 
-        if coupling_type == 'full':
+        if coupling_type == "full":
             # 完整 2d×2d 酉耦合
             self.U_couple = CayleyLinear(2 * dim, 2 * dim, init_scale=init_scale)
-        elif coupling_type == 'diagonal':
+        elif coupling_type == "diagonal":
             # 对角酉：每个维度独立旋转，O(d) 参数
             self.phase = nn.Parameter(torch.zeros(dim, dtype=torch.float32))
             self.mix = nn.Parameter(torch.zeros(dim, dtype=torch.float32))
         else:
             raise ValueError(f"Unknown coupling_type: {coupling_type}")
 
-    def forward(
-        self, x: torch.Tensor, sublayer_output: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, sublayer_output: torch.Tensor) -> torch.Tensor:
         """酉耦合融合。
 
         Args:
@@ -449,13 +453,13 @@ class UnitaryCoupling(nn.Module):
         Returns:
             耦合输出 (..., d)
         """
-        if self.coupling_type == 'full':
+        if self.coupling_type == "full":
             combined = torch.cat([x, sublayer_output], dim=-1)  # (..., 2d)
-            coupled = self.U_couple(combined)                   # (..., 2d)
+            coupled = self.U_couple(combined)  # (..., 2d)
             # 从耦合空间中提取输出（取前半部分 + 后半部分的投影）
-            out = (coupled[..., :self.dim] + coupled[..., self.dim:]) / math.sqrt(2)
+            out = (coupled[..., : self.dim] + coupled[..., self.dim :]) / math.sqrt(2)
             return out
-        elif self.coupling_type == 'diagonal':
+        elif self.coupling_type == "diagonal":
             # 对角酉：|ψ_out⟩_k = e^{iφ_k}(cos θ_k |x⟩_k + sin θ_k |sub⟩_k)
             theta = torch.sigmoid(self.mix) * (torch.pi / 2)
             phase = torch.exp(1j * self.phase)
@@ -466,6 +470,7 @@ class UnitaryCoupling(nn.Module):
 # ──────────────────────────────────────────────
 # 主模块：量子纠缠层
 # ──────────────────────────────────────────────
+
 
 class QuantumEntanglementLayer(nn.Module):
     """量子纠缠层 (QEL) — 完整实现。
@@ -495,7 +500,7 @@ class QuantumEntanglementLayer(nn.Module):
         dim: int,
         use_adaptive: bool = True,
         use_global_qft: bool = True,
-        coupling_type: str = 'full',
+        coupling_type: str = "full",
         qft_steps: int = 1,
         init_scale: float = 0.02,
     ):
@@ -544,17 +549,15 @@ class QuantumEntanglementLayer(nn.Module):
         # ── 2. 全局纠缠（QFT 在序列维度）──
         if self.use_global_qft and N > 1:
             entangled = self.qft(entangled)
-            metrics['qft_applied'] = True
-            metrics['qft_alpha'] = self.qft.alpha.item()
+            metrics["qft_applied"] = True
+            metrics["qft_alpha"] = self.qft.alpha.item()
 
         # ── 3. 酉耦合融合（替代残差连接）──
         output = self.coupling(x, entangled)
 
         return output, metrics
 
-    def _local_entangle(
-        self, x: torch.Tensor, metrics: Dict[str, float]
-    ) -> torch.Tensor:
+    def _local_entangle(self, x: torch.Tensor, metrics: Dict[str, float]) -> torch.Tensor:
         """局部纠缠：对相邻 token 对应用纠缠门。
 
         Args:
@@ -573,7 +576,7 @@ class QuantumEntanglementLayer(nn.Module):
         if self.use_adaptive:
             # 自适应纠缠：批量处理相邻对
             x_even = x[:, 0::2, :]  # (B, ceil(N/2), D)
-            x_odd = x[:, 1::2, :]   # (B, floor(N/2), D)
+            x_odd = x[:, 1::2, :]  # (B, floor(N/2), D)
 
             min_len = min(x_even.shape[1], x_odd.shape[1])
             x_even = x_even[:, :min_len, :]
@@ -586,12 +589,12 @@ class QuantumEntanglementLayer(nn.Module):
             entangled[:, 1::2, :][:, :min_len, :] = x_odd_out
 
             avg_strength = strengths.mean().item()
-            metrics['entanglement_strength'] = avg_strength
+            metrics["entanglement_strength"] = avg_strength
 
             # 纠缠度量
             with torch.no_grad():
                 ent_measure = concurrence(x_even_out, x_odd_out, dim=-1)
-                metrics['avg_concurrence'] = ent_measure.mean().item()
+                metrics["avg_concurrence"] = ent_measure.mean().item()
         else:
             # 固定强度纠缠
             for i in range(0, N - 1, 2):
@@ -601,15 +604,15 @@ class QuantumEntanglementLayer(nn.Module):
                 entangled[:, i, :] = a_out
                 entangled[:, i + 1, :] = b_out
 
-            metrics['entanglement_strength'] = 1.0  # 固定全强度
+            metrics["entanglement_strength"] = 1.0  # 固定全强度
 
         return entangled
 
     def extra_repr(self) -> str:
         return (
-            f'dim={self.dim}, adaptive={self.use_adaptive}, '
-            f'global_qft={self.use_global_qft}, '
-            f'coupling={self.coupling.coupling_type}'
+            f"dim={self.dim}, adaptive={self.use_adaptive}, "
+            f"global_qft={self.use_global_qft}, "
+            f"coupling={self.coupling.coupling_type}"
         )
 
     @property
@@ -633,6 +636,7 @@ class QuantumEntanglementLayer(nn.Module):
 # 向后兼容别名
 # ──────────────────────────────────────────────
 
+
 # 保留旧版 EntanglementGate 接口（但内部使用 Schmidt 门）
 class EntanglementGate(nn.Module):
     """向后兼容的纠缠门。
@@ -644,9 +648,7 @@ class EntanglementGate(nn.Module):
         super().__init__()
         self.gate = SchmidtEntanglementGateV2(dim=dim, use_cayley=True)
 
-    def forward(
-        self, a: torch.Tensor, b: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, a: torch.Tensor, b: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         return self.gate(a, b)
 
     def get_gate_matrix(self) -> torch.Tensor:
@@ -655,8 +657,12 @@ class EntanglementGate(nn.Module):
         对于 2d×2d 酉门，返回其左上 d×d 块作为近似 2x2 表示。
         """
         with torch.no_grad():
-            W = self.gate.U_ent.unitary_matrix if hasattr(self.gate.U_ent, 'unitary_matrix') else None
+            W = (
+                self.gate.U_ent.unitary_matrix
+                if hasattr(self.gate.U_ent, "unitary_matrix")
+                else None
+            )
             if W is not None:
                 # 返回 d×d 的主要作用块
-                return W[:self.gate.dim, :self.gate.dim]
+                return W[: self.gate.dim, : self.gate.dim]
         return torch.eye(2, dtype=torch.complex64)

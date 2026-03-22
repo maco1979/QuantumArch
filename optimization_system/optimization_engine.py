@@ -16,8 +16,7 @@ from enum import Enum
 
 # 配置日志
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -26,9 +25,11 @@ logger = logging.getLogger(__name__)
 # 1. 性能监控模块
 # ============================================================================
 
+
 @dataclass
 class PerformanceMetrics:
     """性能指标数据类"""
+
     loss: float
     accuracy: float
     grad_norm: float
@@ -67,19 +68,19 @@ class PerformanceMonitor:
             return {}
 
         return {
-            'mean': np.mean(values),
-            'std': np.std(values),
-            'min': np.min(values),
-            'max': np.max(values),
-            'median': np.median(values),
-            'p95': np.percentile(values, 95),
-            'p99': np.percentile(values, 99),
+            "mean": np.mean(values),
+            "std": np.std(values),
+            "min": np.min(values),
+            "max": np.max(values),
+            "median": np.median(values),
+            "p95": np.percentile(values, 95),
+            "p99": np.percentile(values, 99),
         }
 
     def detect_trend(self, metric_name: str, threshold: float = 0.05) -> str:
         """检测指标趋势"""
         if len(self.metrics_history) < 50:
-            return 'insufficient_data'
+            return "insufficient_data"
 
         recent = [getattr(m, metric_name) for m in self.metrics_history[-20:]]
         earlier = [getattr(m, metric_name) for m in self.metrics_history[-50:-20]]
@@ -89,21 +90,23 @@ class PerformanceMonitor:
         change_rate = (recent_mean - earlier_mean) / (earlier_mean + 1e-8)
 
         if change_rate > threshold:
-            return 'increasing'
+            return "increasing"
         elif change_rate < -threshold:
-            return 'decreasing'
+            return "decreasing"
         else:
-            return 'stable'
+            return "stable"
 
 
 # ============================================================================
 # 2. 成本控制模块
 # ============================================================================
 
+
 class CircuitBreakerState(Enum):
     """熔断器状态"""
-    CLOSED = "closed"      # 正常工作
-    OPEN = "open"          # 熔断（停止调用）
+
+    CLOSED = "closed"  # 正常工作
+    OPEN = "open"  # 熔断（停止调用）
     HALF_OPEN = "half_open"  # 半开（尝试恢复）
 
 
@@ -187,7 +190,9 @@ class GPUCostMonitor:
         if day_key != int((current_time - 3600) // 86400):
             self.daily_spent = cost
 
-    def check_budget(self, estimated_remaining_steps: int, steps_per_hour: int = 1000) -> Dict[str, Any]:
+    def check_budget(
+        self, estimated_remaining_steps: int, steps_per_hour: int = 1000
+    ) -> Dict[str, Any]:
         """
         检查预算是否充足
 
@@ -202,32 +207,32 @@ class GPUCostMonitor:
         if total_cost > self.daily_budget:
             logger.warning(f"预算超支预测: {total_cost:.2f}/{self.daily_budget:.2f}")
             return {
-                'action': 'stop',
-                'reason': 'budget_exceeded',
-                'current_spent': self.daily_spent,
-                'estimated_remaining': estimated_cost,
-                'budget_utilization': budget_utilization,
+                "action": "stop",
+                "reason": "budget_exceeded",
+                "current_spent": self.daily_spent,
+                "estimated_remaining": estimated_cost,
+                "budget_utilization": budget_utilization,
             }
         elif budget_utilization > 0.9:
             logger.warning(f"预算即将超支: {budget_utilization:.1%}")
             return {
-                'action': 'downgrade',
-                'reason': 'budget_warning',
-                'current_spent': self.daily_spent,
-                'estimated_remaining': estimated_cost,
-                'suggestions': [
-                    '降低batch_size',
-                    '减少数据采样',
-                    '提前早退',
-                ]
+                "action": "downgrade",
+                "reason": "budget_warning",
+                "current_spent": self.daily_spent,
+                "estimated_remaining": estimated_cost,
+                "suggestions": [
+                    "降低batch_size",
+                    "减少数据采样",
+                    "提前早退",
+                ],
             }
         else:
             return {
-                'action': 'continue',
-                'reason': 'budget_ok',
-                'current_spent': self.daily_spent,
-                'estimated_remaining': estimated_cost,
-                'budget_utilization': budget_utilization,
+                "action": "continue",
+                "reason": "budget_ok",
+                "current_spent": self.daily_spent,
+                "estimated_remaining": estimated_cost,
+                "budget_utilization": budget_utilization,
             }
 
 
@@ -235,9 +240,11 @@ class GPUCostMonitor:
 # 3. 影子测试引擎
 # ============================================================================
 
+
 @dataclass
 class ShadowTestResult:
     """影子测试结果"""
+
     variant_name: str
     loss: float
     accuracy: float
@@ -259,12 +266,12 @@ class ShadowTestEngine:
     def add_baseline_result(self, loss: float, accuracy: float):
         """添加基线模型结果"""
         result = ShadowTestResult(
-            variant_name='baseline',
+            variant_name="baseline",
             loss=loss,
             accuracy=accuracy,
             improvement=0.0,
             p_value=1.0,
-            sample_count=len(self.baseline_results) + 1
+            sample_count=len(self.baseline_results) + 1,
         )
         self.baseline_results.append(result)
 
@@ -284,6 +291,7 @@ class ShadowTestEngine:
             improvement_std = np.std([r.improvement for r in variant_history[-10:]])
             if improvement_std > 0:
                 from scipy import stats
+
                 z_score = improvement / improvement_std
                 p_value = 2 * (1 - stats.norm.cdf(abs(z_score)))
             else:
@@ -297,7 +305,7 @@ class ShadowTestEngine:
             accuracy=accuracy,
             improvement=improvement,
             p_value=p_value,
-            sample_count=len(variant_history) + 1
+            sample_count=len(variant_history) + 1,
         )
         self.variant_results[variant_name].append(result)
 
@@ -337,17 +345,18 @@ class ShadowTestEngine:
         results = self.variant_results[variant_name]
 
         return {
-            'sample_count': len(results),
-            'avg_improvement': np.mean([r.improvement for r in results[-50:]]),
-            'avg_p_value': np.mean([r.p_value for r in results[-50:]]),
-            'avg_loss': np.mean([r.loss for r in results[-50:]]),
-            'avg_accuracy': np.mean([r.accuracy for r in results[-50:]]),
+            "sample_count": len(results),
+            "avg_improvement": np.mean([r.improvement for r in results[-50:]]),
+            "avg_p_value": np.mean([r.p_value for r in results[-50:]]),
+            "avg_loss": np.mean([r.loss for r in results[-50:]]),
+            "avg_accuracy": np.mean([r.accuracy for r in results[-50:]]),
         }
 
 
 # ============================================================================
 # 4. QSA自适应控制器
 # ============================================================================
+
 
 class AdaptiveQSAController:
     """量子叠加注意力的自适应筛选比例控制器"""
@@ -394,6 +403,7 @@ class AdaptiveQSAController:
 # 5. QCI坍缩阈值学习器
 # ============================================================================
 
+
 class CollapseThresholdLearner:
     """基于强化学习的坍缩阈值控制器"""
 
@@ -406,7 +416,7 @@ class CollapseThresholdLearner:
             nn.ReLU(),
             nn.Linear(32, 16),
             nn.ReLU(),
-            nn.Linear(16, 2)  # 输出 tau_low 和 tau_high
+            nn.Linear(16, 2),  # 输出 tau_low 和 tau_high
         )
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=learning_rate)
 
@@ -424,11 +434,14 @@ class CollapseThresholdLearner:
             - tau_low: 早退低阈值
             - tau_high: 早退高阈值
         """
-        x = torch.tensor([
-            batch_stats['avg_entropy'],
-            batch_stats['entropy_std'],
-            batch_stats['early_exit_rate']
-        ], dtype=torch.float32).unsqueeze(0)
+        x = torch.tensor(
+            [
+                batch_stats["avg_entropy"],
+                batch_stats["entropy_std"],
+                batch_stats["early_exit_rate"],
+            ],
+            dtype=torch.float32,
+        ).unsqueeze(0)
 
         thresholds = self.policy(x)
         tau_low = torch.sigmoid(thresholds[0, 0]) * 2.0  # 0-2范围
@@ -449,11 +462,14 @@ class CollapseThresholdLearner:
         reward = speedup * 0.8 - accuracy_loss * 0.2
 
         # 构造状态张量
-        x = torch.tensor([
-            batch_stats['avg_entropy'],
-            batch_stats['entropy_std'],
-            batch_stats['early_exit_rate']
-        ], dtype=torch.float32).unsqueeze(0)
+        x = torch.tensor(
+            [
+                batch_stats["avg_entropy"],
+                batch_stats["entropy_std"],
+                batch_stats["early_exit_rate"],
+            ],
+            dtype=torch.float32,
+        ).unsqueeze(0)
 
         # 前向传播
         thresholds = self.policy(x)
@@ -475,6 +491,7 @@ class CollapseThresholdLearner:
 # ============================================================================
 # 6. 自适应学习率控制器
 # ============================================================================
+
 
 class AdaptiveLearningRate:
     """分别为模长和相位维度设计自适应学习率"""
@@ -519,6 +536,7 @@ class AdaptiveLearningRate:
 # 7. 异常检测器
 # ============================================================================
 
+
 class AnomalyDetector:
     """训练过程异常检测"""
 
@@ -537,29 +555,29 @@ class AnomalyDetector:
         anomalies = []
 
         # 1. 损失爆炸检测
-        if 'loss' in current_metrics and len(self.metrics['loss']) > 10:
-            baseline = np.mean(self.metrics['loss'][-10:])
-            if current_metrics['loss'] > baseline * 3:
-                anomalies.append('loss_explosion')
+        if "loss" in current_metrics and len(self.metrics["loss"]) > 10:
+            baseline = np.mean(self.metrics["loss"][-10:])
+            if current_metrics["loss"] > baseline * 3:
+                anomalies.append("loss_explosion")
 
         # 2. 梯度消失/爆炸检测
-        if 'grad_norm' in current_metrics:
-            if current_metrics['grad_norm'] < 1e-7:
-                anomalies.append('gradient_vanishing')
-            elif current_metrics['grad_norm'] > 10:
-                anomalies.append('gradient_explosion')
+        if "grad_norm" in current_metrics:
+            if current_metrics["grad_norm"] < 1e-7:
+                anomalies.append("gradient_vanishing")
+            elif current_metrics["grad_norm"] > 10:
+                anomalies.append("gradient_explosion")
 
         # 3. 性能退化检测
-        if 'batch_time' in current_metrics and len(self.metrics['batch_time']) > 100:
-            recent_time = np.mean(self.metrics['batch_time'][-10:])
-            baseline_time = np.mean(self.metrics['batch_time'][:10])
+        if "batch_time" in current_metrics and len(self.metrics["batch_time"]) > 100:
+            recent_time = np.mean(self.metrics["batch_time"][-10:])
+            baseline_time = np.mean(self.metrics["batch_time"][:10])
             if recent_time > baseline_time * 2:
-                anomalies.append('performance_degradation')
+                anomalies.append("performance_degradation")
 
         # 4. 酉约束违背检测
-        if 'unitarity_violation' in current_metrics:
-            if current_metrics['unitarity_violation'] > 1e-4:
-                anomalies.append('unitarity_violation')
+        if "unitarity_violation" in current_metrics:
+            if current_metrics["unitarity_violation"] > 1e-4:
+                anomalies.append("unitarity_violation")
 
         return anomalies
 
@@ -568,16 +586,17 @@ class AnomalyDetector:
 # 8. 自动恢复策略
 # ============================================================================
 
+
 class AutoRecovery:
     """异常自动恢复策略"""
 
     def __init__(self):
         self.recovery_strategies = {
-            'loss_explosion': self._rollback_and_reduce_lr,
-            'gradient_explosion': self._clip_grad_and_reduce_lr,
-            'gradient_vanishing': self._reinitialize_output_layer,
-            'performance_degradation': self._restart_from_checkpoint,
-            'unitarity_violation': self._reproject_to_unitary,
+            "loss_explosion": self._rollback_and_reduce_lr,
+            "gradient_explosion": self._clip_grad_and_reduce_lr,
+            "gradient_vanishing": self._reinitialize_output_layer,
+            "performance_degradation": self._restart_from_checkpoint,
+            "unitarity_violation": self._reproject_to_unitary,
         }
 
     def recover(self, anomaly_type: str, context: Optional[Dict] = None) -> Dict[str, Any]:
@@ -588,53 +607,41 @@ class AutoRecovery:
         """
         if anomaly_type not in self.recovery_strategies:
             logger.warning(f"未知的异常类型: {anomaly_type}")
-            return {'action': 'ignore'}
+            return {"action": "ignore"}
 
         logger.warning(f"检测到异常: {anomaly_type}, 执行自动恢复")
         return self.recovery_strategies[anomaly_type](context or {})
 
     def _rollback_and_reduce_lr(self, context: Dict) -> Dict[str, Any]:
         """损失爆炸：回滚到最近checkpoint，降低学习率"""
-        return {
-            'action': 'rollback',
-            'reduce_lr_factor': 0.5,
-            'reason': 'loss_explosion_detected'
-        }
+        return {"action": "rollback", "reduce_lr_factor": 0.5, "reason": "loss_explosion_detected"}
 
     def _clip_grad_and_reduce_lr(self, context: Dict) -> Dict[str, Any]:
         """梯度爆炸：梯度裁剪 + 降低学习率"""
         return {
-            'action': 'clip_gradient',
-            'clip_value': 1.0,
-            'reduce_lr_factor': 0.5,
-            'reason': 'gradient_explosion_detected'
+            "action": "clip_gradient",
+            "clip_value": 1.0,
+            "reduce_lr_factor": 0.5,
+            "reason": "gradient_explosion_detected",
         }
 
     def _reinitialize_output_layer(self, context: Dict) -> Dict[str, Any]:
         """梯度消失：重新初始化输出层"""
-        return {
-            'action': 'reinitialize_output',
-            'reason': 'gradient_vanishing_detected'
-        }
+        return {"action": "reinitialize_output", "reason": "gradient_vanishing_detected"}
 
     def _restart_from_checkpoint(self, context: Dict) -> Dict[str, Any]:
         """性能退化：从checkpoint重启"""
-        return {
-            'action': 'restart',
-            'reason': 'performance_degradation_detected'
-        }
+        return {"action": "restart", "reason": "performance_degradation_detected"}
 
     def _reproject_to_unitary(self, context: Dict) -> Dict[str, Any]:
         """酉约束违背：重新投影到酉矩阵空间"""
-        return {
-            'action': 'reproject',
-            'reason': 'unitarity_violation_detected'
-        }
+        return {"action": "reproject", "reason": "unitarity_violation_detected"}
 
 
 # ============================================================================
 # 9. 优化系统主控制器
 # ============================================================================
+
 
 class OptimizationSystem:
     """自动化优化系统主控制器"""
@@ -665,16 +672,16 @@ class OptimizationSystem:
 
         # 1. 记录指标
         self.monitor.record(metrics)
-        self.anomaly_detector.record('loss', metrics.loss)
-        self.anomaly_detector.record('grad_norm', metrics.grad_norm)
-        self.anomaly_detector.record('batch_time', metrics.batch_time)
+        self.anomaly_detector.record("loss", metrics.loss)
+        self.anomaly_detector.record("grad_norm", metrics.grad_norm)
+        self.anomaly_detector.record("batch_time", metrics.batch_time)
 
         # 2. 异常检测
         current_metrics = {
-            'loss': metrics.loss,
-            'grad_norm': metrics.grad_norm,
-            'batch_time': metrics.batch_time,
-            'unitarity_violation': metrics.unitarity_violation,
+            "loss": metrics.loss,
+            "grad_norm": metrics.grad_norm,
+            "batch_time": metrics.batch_time,
+            "unitarity_violation": metrics.unitarity_violation,
         }
         anomalies = self.anomaly_detector.check_anomalies(current_metrics)
 
@@ -701,8 +708,8 @@ class OptimizationSystem:
         logger.info(f"预算状态: {budget_status}")
 
         # 2. 更新QSA筛选比例
-        loss_stats = self.monitor.get_statistics('loss', last_n=50)
-        if loss_stats and 'mean' in loss_stats:
+        loss_stats = self.monitor.get_statistics("loss", last_n=50)
+        if loss_stats and "mean" in loss_stats:
             # 模拟：假设准确率下降0.1%，速度提升3倍
             accuracy_drop = 0.001
             speedup = 3.0
@@ -713,16 +720,22 @@ class OptimizationSystem:
         logger.info(f"执行第 {self.step_count} 步深度优化")
 
         # 1. 评估影子测试变体
-        for variant_name in ['variant_A', 'variant_B']:
+        for variant_name in ["variant_A", "variant_B"]:
             should_promote, reason = self.shadow_engine.should_promote(variant_name)
             if should_promote:
                 logger.info(f"✓ {variant_name} 晋升到生产: {reason}")
 
         # 2. 调整QCI坍缩阈值
         batch_stats = {
-            'avg_entropy': np.mean([m.qci_early_exit_rate for m in self.monitor.metrics_history[-100:]]),
-            'entropy_std': np.std([m.qci_early_exit_rate for m in self.monitor.metrics_history[-100:]]),
-            'early_exit_rate': np.mean([m.qci_early_exit_rate for m in self.monitor.metrics_history[-100:]]),
+            "avg_entropy": np.mean(
+                [m.qci_early_exit_rate for m in self.monitor.metrics_history[-100:]]
+            ),
+            "entropy_std": np.std(
+                [m.qci_early_exit_rate for m in self.monitor.metrics_history[-100:]]
+            ),
+            "early_exit_rate": np.mean(
+                [m.qci_early_exit_rate for m in self.monitor.metrics_history[-100:]]
+            ),
         }
         tau_low, tau_high = self.qci_learner.forward(batch_stats)
         logger.info(f"坍缩阈值更新: tau_low={tau_low:.3f}, tau_high={tau_high:.3f}")
@@ -745,11 +758,11 @@ class OptimizationSystem:
     def get_system_status(self) -> Dict[str, Any]:
         """获取系统当前状态"""
         return {
-            'step_count': self.step_count,
-            'qsa_ratio': self.qsa_controller.ratio,
-            'daily_cost': self.cost_monitor.daily_spent,
-            'api_guard_state': self.api_guard.state.value,
-            'metrics_count': len(self.monitor.metrics_history),
+            "step_count": self.step_count,
+            "qsa_ratio": self.qsa_controller.ratio,
+            "daily_cost": self.cost_monitor.daily_spent,
+            "api_guard_state": self.api_guard.state.value,
+            "metrics_count": len(self.monitor.metrics_history),
         }
 
 
@@ -757,7 +770,7 @@ class OptimizationSystem:
 # 使用示例
 # ============================================================================
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 创建优化系统
     optimizer = OptimizationSystem()
 

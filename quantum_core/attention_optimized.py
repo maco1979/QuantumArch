@@ -39,14 +39,14 @@ class PhaseModulation(nn.Module):
     """可学习相位调制函数（QIR 的核心组件）- 优化版本。
 
     f_φ(|α|) = MLP(|α|)，将内积模长映射为相位偏移。
-    
+
     优化：使用更轻量的 MLP 架构
     """
 
     def __init__(self, hidden_dim: int = 64, use_residual: bool = True):
         super().__init__()
         self.use_residual = use_residual
-        
+
         # 轻量级 MLP：减少参数和计算
         self.net = nn.Sequential(
             nn.Linear(1, hidden_dim // 2),  # 减小隐藏层
@@ -63,11 +63,11 @@ class PhaseModulation(nn.Module):
             相位偏移 (...,)
         """
         out = self.net(magnitude.unsqueeze(-1)).squeeze(-1)
-        
+
         if self.use_residual:
             # 添加残差连接使训练更稳定
             return out + magnitude * 0.1
-        
+
         return out
 
 
@@ -97,7 +97,7 @@ class QuantumSuperpositionAttention(nn.Module):
         head_dim: Optional[int] = None,
         topk_ratio: float = 0.1,
         dropout: float = 0.0,
-        mode: str = 'topk',
+        mode: str = "topk",
         use_fused_attention: bool = True,  # 新增：融合注意力选项
     ):
         super().__init__()
@@ -106,11 +106,12 @@ class QuantumSuperpositionAttention(nn.Module):
         self.head_dim = head_dim or (dim // num_heads)
         self.topk_ratio = topk_ratio
         self.mode = mode
-        self.scale = self.head_dim ** -0.5
+        self.scale = self.head_dim**-0.5
         self.use_fused_attention = use_fused_attention
 
-        assert self.num_heads * self.head_dim == dim, \
-            f"num_heads({num_heads}) * head_dim({self.head_dim}) != dim({dim})"
+        assert (
+            self.num_heads * self.head_dim == dim
+        ), f"num_heads({num_heads}) * head_dim({self.head_dim}) != dim({dim})"
 
         # 复数 Q/K/V 投影（使用 Cayley 参数化保证酉性）
         # 优化：非方阵使用标准 Linear 加速
@@ -125,7 +126,7 @@ class QuantumSuperpositionAttention(nn.Module):
         self.phase_fn = PhaseModulation(hidden_dim=64, use_residual=True)
 
         self.dropout_p = dropout
-        
+
         # 缓存用于 torch.compile
         self._compiled = False
 
@@ -160,7 +161,7 @@ class QuantumSuperpositionAttention(nn.Module):
 
         # ── 3. 复数内积 + 干涉调制 ──
         # α_ij = ⟨q_i | k_j⟩，形状 (B, num_heads, N, N)
-        alpha = torch.einsum('bhnd,bhsd->bhns', Q.conj(), K) * self.scale
+        alpha = torch.einsum("bhnd,bhsd->bhns", Q.conj(), K) * self.scale
 
         # 干涉调制：β = α · exp(i · f(|α|))
         alpha_mag = alpha.abs()
@@ -174,7 +175,7 @@ class QuantumSuperpositionAttention(nn.Module):
         attn_entropy = von_neumann_entropy(attn_probs, dim=-1)  # (B, H, N)
 
         # ── 6. Top-K 筛选或完整注意力 ──
-        if self.mode == 'topk' and training:
+        if self.mode == "topk" and training:
             output = self._topk_attention_optimized(V, attn_probs, B, N)
         else:
             output = self._full_attention_optimized(V, attn_probs, attention_mask)
@@ -192,11 +193,11 @@ class QuantumSuperpositionAttention(nn.Module):
 
         # 构建指标
         metrics = {
-            'attention_entropy': attn_entropy.mean().item(),
-            'attention_probs_max': attn_probs.max().item(),
-            'interference_phase_std': phase_shift.std().item(),
-            'topk_ratio_actual': self.topk_ratio,
-            'qsa_mode': self.mode,
+            "attention_entropy": attn_entropy.mean().item(),
+            "attention_probs_max": attn_probs.max().item(),
+            "interference_phase_std": phase_shift.std().item(),
+            "topk_ratio_actual": self.topk_ratio,
+            "qsa_mode": self.mode,
         }
 
         return output, metrics
@@ -223,7 +224,7 @@ class QuantumSuperpositionAttention(nn.Module):
         # 优化：直接使用 baddbmm（融合乘加）可能更快
         # 但 einsum 更通用
         weights = attn_probs.to(V.dtype)
-        return torch.einsum('bhns,bhsd->bhnd', weights, V)
+        return torch.einsum("bhns,bhsd->bhnd", weights, V)
 
     def _topk_attention_optimized(
         self,
@@ -256,15 +257,13 @@ class QuantumSuperpositionAttention(nn.Module):
         # 构建索引：使用 flatten + index_select 可能更快
         # 但对于多头，需要 reshape
         V_reshaped = V.reshape(B, H, N, d_h)
-        
+
         # 使用 advanced indexing
         topk_indices_expanded = topk_indices.unsqueeze(-1).expand(-1, -1, -1, -1, d_h)
-        
+
         # 优化后的 gather：使用 torch.gather 更高效
         V_topk = torch.gather(
-            V_reshaped.unsqueeze(3).expand(B, H, N, N, d_h),
-            dim=3,
-            index=topk_indices_expanded
+            V_reshaped.unsqueeze(3).expand(B, H, N, N, d_h), dim=3, index=topk_indices_expanded
         )  # (B, H, N, k, d_h)
 
         # 复数 Softmax 加权
@@ -281,43 +280,43 @@ class QuantumSuperpositionAttention(nn.Module):
         N: int,
     ) -> torch.Tensor:
         """Flash 风格 Top-K 注意力 - 极致优化。
-        
+
         当序列很长时使用分块计算减少显存。
         """
         k = max(1, int(self.topk_ratio * N))
         H = V.shape[1]
         d_h = V.shape[-1]
-        
+
         # 分块大小（可配置）
         chunk_size = min(64, N)
         num_chunks = (N + chunk_size - 1) // chunk_size
-        
+
         # 初始化输出
         output = torch.zeros(B, H, N, d_h, dtype=V.dtype, device=V.device)
-        
+
         for start_idx in range(0, N, chunk_size):
             end_idx = min(start_idx + chunk_size, N)
             chunk_len = end_idx - start_idx
-            
+
             # 当前块的 attention
             attn_chunk = attn_probs[:, :, :, start_idx:end_idx]  # (B, H, N, chunk)
             V_chunk = V[:, :, start_idx:end_idx, :]  # (B, H, chunk, d_h)
-            
+
             # Top-K within chunk
             topk_chunk_probs, topk_chunk_idx = torch.topk(attn_chunk, min(k, chunk_len), dim=-1)
-            
+
             # Gather values
             chunk_idx_expanded = topk_chunk_idx.unsqueeze(-1).expand(-1, -1, -1, -1, d_h)
             V_expanded = V_chunk.unsqueeze(2).expand(-1, -1, N, -1, -1)
             V_topk_chunk = torch.gather(V_expanded, dim=3, index=chunk_idx_expanded)
-            
+
             # Normalize and weighted sum
             topk_chunk_norm = topk_chunk_probs / (topk_chunk_probs.sum(dim=-1, keepdim=True) + 1e-8)
             weights_chunk = complex_softmax(topk_chunk_norm * k, dim=-1).unsqueeze(-1)
-            
+
             # 写入输出
             output[:, :, start_idx:end_idx, :] = (weights_chunk * V_topk_chunk).sum(dim=3)
-        
+
         return output
 
     @torch.jit.export
@@ -331,15 +330,16 @@ class QuantumSuperpositionAttention(nn.Module):
 
     def extra_repr(self) -> str:
         return (
-            f'dim={self.dim}, num_heads={self.num_heads}, '
-            f'head_dim={self.head_dim}, topk_ratio={self.topk_ratio}, '
-            f'mode={self.mode}, fused={self.use_fused_attention}'
+            f"dim={self.dim}, num_heads={self.num_heads}, "
+            f"head_dim={self.head_dim}, topk_ratio={self.topk_ratio}, "
+            f"mode={self.mode}, fused={self.use_fused_attention}"
         )
 
 
 # ============================================================================
 # 融合算子（使用 torch.jit.script 优化）
 # ============================================================================
+
 
 @torch.jit.script
 def fused_qkv_attention(
@@ -351,45 +351,45 @@ def fused_qkv_attention(
     training: bool,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """融合 QKV 注意力计算（可被 torch.compile 优化）。
-    
+
     Args:
         Q, K, V: (B, H, N, d_h)
         scale: 缩放因子
         topk_ratio: Top-K 比例
         training: 训练模式
-    
+
     Returns:
         output: (B, H, N, d_h)
         attn_weights: (B, H, N, N) or (B, H, N, k)
     """
     B, H, N, d_h = Q.shape
     k = max(1, int(topk_ratio * N))
-    
+
     # 复数内积
-    alpha = torch.einsum('bhnd,bhsd->bhns', Q.conj(), K) * scale
-    
+    alpha = torch.einsum("bhnd,bhsd->bhns", Q.conj(), K) * scale
+
     # Born 归一化
     probs = alpha.abs().pow(2)
     attn_weights = probs / probs.sum(dim=-1, keepdim=True).clamp(min=1e-8)
-    
+
     if training and topk_ratio < 1.0:
         # Top-K 稀疏注意力
         topk_probs, topk_idx = torch.topk(attn_weights, k=k, dim=-1)
         topk_probs = topk_probs / topk_probs.sum(dim=-1, keepdim=True).clamp(min=1e-8)
-        
+
         # Gather V
         V_expanded = V.unsqueeze(2).expand(-1, -1, -1, N, -1)
         idx_expanded = topk_idx.unsqueeze(-1).expand(-1, -1, -1, -1, d_h)
         V_topk = torch.gather(V_expanded, dim=3, index=idx_expanded)
-        
+
         # 加权求和
         weights = topk_probs.unsqueeze(-1)
         output = (weights * V_topk).sum(dim=3)
     else:
         # 完整注意力
         weights = attn_weights.unsqueeze(-1)
-        output = torch.einsum('bhns,bhsd->bhnd', weights, V)
-    
+        output = torch.einsum("bhns,bhsd->bhnd", weights, V)
+
     return output, attn_weights
 
 
@@ -399,7 +399,7 @@ def fused_interference_modulation(
     phase_shift: torch.Tensor,
 ) -> torch.Tensor:
     """融合干涉调制计算。
-    
+
     β = α · exp(i · φ)
     """
     return alpha * torch.exp(1j * phase_shift)

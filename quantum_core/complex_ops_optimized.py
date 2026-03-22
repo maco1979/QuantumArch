@@ -18,6 +18,7 @@ from functools import partial
 # 优化版复数运算
 # ============================================================================
 
+
 def complex_to_polar(z: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     """将复数张量分解为模长和相位（优化版本）。
 
@@ -41,11 +42,7 @@ def polar_to_complex(magnitude: torch.Tensor, phase: torch.Tensor) -> torch.Tens
     return magnitude * torch.exp(1j * phase)
 
 
-def normalize_quantum_state(
-    z: torch.Tensor, 
-    dim: int = -1, 
-    eps: float = 1e-8
-) -> torch.Tensor:
+def normalize_quantum_state(z: torch.Tensor, dim: int = -1, eps: float = 1e-8) -> torch.Tensor:
     """将复数张量归一化为量子态（内存优化版本）。
 
     优化：使用单次计算替代多次 sum
@@ -72,10 +69,7 @@ def born_probability(z: torch.Tensor, dim: int = -1) -> torch.Tensor:
 
 @torch.jit.script
 def _born_normalize_fused(
-    z_real: torch.Tensor, 
-    z_imag: torch.Tensor, 
-    dim: int, 
-    eps: float
+    z_real: torch.Tensor, z_imag: torch.Tensor, dim: int, eps: float
 ) -> torch.Tensor:
     """融合 Born 归一化（减少内存分配）。"""
     # 计算模长平方
@@ -123,7 +117,7 @@ def complex_softmax(z: torch.Tensor, dim: int = -1, eps: float = 1e-8) -> torch.
     # 数值稳定：减去最大实部
     z_real_max = z.real.max(dim=dim, keepdim=True).values
     z_stable = z - z_real_max
-    
+
     # 计算模长平方
     abs_sq = z_stable.abs().pow(2)
     # 归一化
@@ -142,11 +136,7 @@ def complex_softmax_real(z: torch.Tensor, dim: int = -1) -> torch.Tensor:
     return exp_z / exp_z.sum(dim=dim, keepdim=True).clamp(min=1e-8)
 
 
-def complex_inner_product(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    dim: int = -1
-) -> torch.Tensor:
+def complex_inner_product(a: torch.Tensor, b: torch.Tensor, dim: int = -1) -> torch.Tensor:
     """复数内积 ⟨a|b⟩ = Σ conj(a_i) * b_i（优化版本）。
 
     优化：使用 conj() 替代手动计算
@@ -161,13 +151,13 @@ def complex_dropout(z: torch.Tensor, p: float = 0.1, training: bool = True) -> t
     """
     if not training or p == 0.0:
         return z
-    
+
     # 同时对实部和虚部应用 dropout
     mask = F.dropout(
-        torch.ones_like(z.real), 
-        p=p, 
+        torch.ones_like(z.real),
+        p=p,
         training=training,
-        inplace=False  # inplace 模式在某些情况下有问题
+        inplace=False,  # inplace 模式在某些情况下有问题
     )
     return z * mask
 
@@ -179,7 +169,7 @@ def complex_dropout_v2(z: torch.Tensor, p: float = 0.1, training: bool = True) -
     """
     if not training or p == 0.0:
         return z
-    
+
     mask = torch.rand_like(z.real) > p
     mask = mask.to(z.dtype) / (1 - p)
     return z * mask
@@ -188,6 +178,7 @@ def complex_dropout_v2(z: torch.Tensor, p: float = 0.1, training: bool = True) -
 # ============================================================================
 # 融合算子（使用 torch.jit.script）
 # ============================================================================
+
 
 @torch.jit.script
 def fused_born_entropy(
@@ -202,18 +193,18 @@ def fused_born_entropy(
     """
     # 计算模长平方
     prob = z_real.pow(2) + z_imag.pow(2)
-    
+
     # 归一化因子
     sum_prob = prob.sum(dim=dim, keepdim=True).clamp(min=eps)
     norm_factor = sum_prob.rsqrt()
-    
+
     # 归一化概率
     prob_norm = prob * norm_factor.pow(2)
-    
+
     # 熵计算
     log_prob = prob_norm.clamp(min=eps).log()
     entropy = -(prob_norm * log_prob).sum(dim=dim)
-    
+
     return entropy
 
 
@@ -228,21 +219,21 @@ def fused_attention_score(
     """融合复数注意力分数计算。
 
     α_ij = ⟨q_i | k_j⟩ * scale
-    
+
     优化：减少复数到实数的转换开销
     """
     # (Q_real + iQ_imag).conj() * (K_real + iK_imag)
     # = (Q_real - iQ_imag) * (K_real + iK_imag)
     # = Q_real*K_real + Q_imag*K_imag + i*(Q_real*K_imag - Q_imag*K_real)
-    
+
     # 实部
     attn_real = Q_real * K_real + Q_imag * K_imag
     # 虚部
     attn_imag = Q_real * K_imag - Q_imag * K_real
-    
+
     # 转为复数
     attn = torch.complex(attn_real, attn_imag) * scale
-    
+
     return attn
 
 
@@ -255,22 +246,23 @@ def fused_attention_output(
     """融合注意力输出计算（复数加权求和）。
 
     output = Σ w_i * V_i
-    
+
     优化：直接计算实部虚部，减少复数运算
     """
     # 权重是实数（Born 概率）
     # output_real = Σ w_i * V_real_i
     # output_imag = Σ w_i * V_imag_i
-    
-    output_real = torch.einsum('...n,...nd->...d', attn_weights, V_real)
-    output_imag = torch.einsum('...n,...nd->...d', attn_weights, V_imag)
-    
+
+    output_real = torch.einsum("...n,...nd->...d", attn_weights, V_real)
+    output_imag = torch.einsum("...n,...nd->...d", attn_weights, V_imag)
+
     return output_real, output_imag
 
 
 # ============================================================================
 # CUDA 优化原语
 # ============================================================================
+
 
 def complex_matmul(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """复数矩阵乘法（优化版本）。
@@ -280,18 +272,16 @@ def complex_matmul(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     # 分离实部虚部
     a_real, a_imag = a.real, a.imag
     b_real, b_imag = b.real, b.imag
-    
+
     # (a + ib)(c + id) = (ac - bd) + i(ad + bc)
     out_real = a_real @ b_real - a_imag @ b_imag
     out_imag = a_real @ b_imag + a_imag @ b_real
-    
+
     return torch.complex(out_real, out_imag)
 
 
 def complex_layer_norm(
-    x: torch.Tensor, 
-    normalized_shape: int, 
-    eps: float = 1e-5
+    x: torch.Tensor, normalized_shape: int, eps: float = 1e-5
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """复数层归一化（融合版本）。
 
@@ -301,17 +291,17 @@ def complex_layer_norm(
         std: 标准差
     """
     x_real, x_imag = x.real, x.imag
-    
+
     # 计算实部和虚部的均值和方差
     # 简化：使用实部统计
     mean = x_real.mean(dim=-1, keepdim=True)
     var = x_real.var(dim=-1, keepdim=True, unbiased=False)
     std = (var + eps).sqrt()
-    
+
     # 归一化
     x_real_norm = (x_real - mean) / std
     x_imag_norm = x_imag / std
-    
+
     return torch.complex(x_real_norm, x_imag_norm), mean, std
 
 
@@ -319,48 +309,49 @@ def complex_layer_norm(
 # 性能测试工具
 # ============================================================================
 
+
 class PerformanceProfiler:
     """性能分析工具。"""
-    
+
     @staticmethod
     def profile_operation(op_func, *args, num_runs=100, warmup=10, **kwargs):
         """分析操作性能。"""
         import time
-        
+
         # 预热
         for _ in range(warmup):
             _ = op_func(*args, **kwargs)
-        
+
         if torch.cuda.is_available():
             torch.cuda.synchronize()
-        
+
         # 计时
         start = time.perf_counter()
         for _ in range(num_runs):
             _ = op_func(*args, **kwargs)
-        
+
         if torch.cuda.is_available():
             torch.cuda.synchronize()
-        
+
         elapsed = time.perf_counter() - start
         avg_time = elapsed / num_runs * 1000  # ms
-        
+
         return {
-            'total_time': elapsed,
-            'avg_time_ms': avg_time,
-            'ops_per_sec': num_runs / elapsed,
+            "total_time": elapsed,
+            "avg_time_ms": avg_time,
+            "ops_per_sec": num_runs / elapsed,
         }
-    
+
     @staticmethod
     def compare_operations(op1, op2, *args, **kwargs):
         """对比两个操作的性能。"""
         result1 = PerformanceProfiler.profile_operation(op1, *args, **kwargs)
         result2 = PerformanceProfiler.profile_operation(op2, *args, **kwargs)
-        
-        speedup = result1['avg_time_ms'] / result2['avg_time_ms']
-        
+
+        speedup = result1["avg_time_ms"] / result2["avg_time_ms"]
+
         return {
-            'op1': result1,
-            'op2': result2,
-            'speedup': speedup,
+            "op1": result1,
+            "op2": result2,
+            "speedup": speedup,
         }

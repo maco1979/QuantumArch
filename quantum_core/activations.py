@@ -46,7 +46,7 @@ class ModReLU(nn.Module):
         return z * scale
 
     def extra_repr(self) -> str:
-        return f'bias_init={self.bias.data.mean().item():.2f}, eps={self.eps}'
+        return f"bias_init={self.bias.data.mean().item():.2f}, eps={self.eps}"
 
 
 class ModReLUFunction(torch.autograd.Function):
@@ -86,10 +86,12 @@ class ModReLUFunction(torch.autograd.Function):
         #               = (|z|+ε - |z|-b) / (|z|+ε)²
         #               = (ε - b) / (|z|+ε)²
         safe_abs = abs_z + eps
-        d_scale_d_abs = mask * (eps - (-F.relu(-abs_z - 0 * (abs_z + 1) + abs_z + 0)) + (1 - mask) * 0)
+        d_scale_d_abs = mask * (
+            eps - (-F.relu(-abs_z - 0 * (abs_z + 1) + abs_z + 0)) + (1 - mask) * 0
+        )
         # 简化：使用数值稳定的表达式
         activated = scale * safe_abs  # = ReLU(|z| + b)
-        d_scale_d_abs = mask * (safe_abs - activated) / (safe_abs ** 2)
+        d_scale_d_abs = mask * (safe_abs - activated) / (safe_abs**2)
 
         # ∂|z|/∂z = conj(z) / (2|z|)  (Wirtinger 导数)
         # 但 PyTorch 复数 autograd 直接处理，用链式法则
@@ -116,9 +118,13 @@ class ModReLUFunction(torch.autograd.Function):
         # bias 的梯度：∂L/∂b = Σ (∂L/∂y * y * ∂scale/∂b)
         # ∂scale/∂b = mask / (|z| + eps)
         if mask.requires_grad:
-            grad_bias = (grad_output * z * mask / safe_abs).real.sum(
-                dim=tuple(range(grad_output.dim() - 1))
-            ) if grad_output.dim() > 1 else (grad_output * z * mask / safe_abs).real.sum()
+            grad_bias = (
+                (grad_output * z * mask / safe_abs).real.sum(
+                    dim=tuple(range(grad_output.dim() - 1))
+                )
+                if grad_output.dim() > 1
+                else (grad_output * z * mask / safe_abs).real.sum()
+            )
         else:
             grad_bias = (grad_output * z * mask / safe_abs).real.flatten().sum()
 
@@ -143,7 +149,7 @@ class ModReLUV2(nn.Module):
         return ModReLUFunction.apply(z, self.bias, self.eps)
 
     def extra_repr(self) -> str:
-        return f'bias_init={self.bias.data.mean().item():.2f}, eps={self.eps}'
+        return f"bias_init={self.bias.data.mean().item():.2f}, eps={self.eps}"
 
 
 class CReLU(nn.Module):

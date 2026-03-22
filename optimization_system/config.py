@@ -11,6 +11,7 @@ import os
 # 优化系统配置
 # ============================================================================
 
+
 class OptimizationConfig:
     """优化系统配置类"""
 
@@ -21,7 +22,7 @@ class OptimizationConfig:
     def _load_config(self) -> Dict[str, Any]:
         """加载配置文件"""
         if self.config_path and os.path.exists(self.config_path):
-            with open(self.config_path, 'r', encoding='utf-8') as f:
+            with open(self.config_path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f)
         else:
             return self._get_default_config()
@@ -30,92 +31,83 @@ class OptimizationConfig:
         """默认配置"""
         return {
             # 性能监控配置
-            'monitoring': {
-                'window_size': 1000,
-                'save_interval': 100,
-                'metrics_path': './monitoring/metrics/',
+            "monitoring": {
+                "window_size": 1000,
+                "save_interval": 100,
+                "metrics_path": "./monitoring/metrics/",
             },
-
             # 成本控制配置
-            'cost_control': {
-                'gpu': {
-                    'cost_per_hour': 3.0,
-                    'daily_budget': 100.0,
-                    'monthly_budget': 2000.0,
+            "cost_control": {
+                "gpu": {
+                    "cost_per_hour": 3.0,
+                    "daily_budget": 100.0,
+                    "monthly_budget": 2000.0,
                 },
-                'api': {
-                    'max_cost_per_hour': 5.0,
-                    'failure_threshold': 5,
-                    'recovery_time': 300,
+                "api": {
+                    "max_cost_per_hour": 5.0,
+                    "failure_threshold": 5,
+                    "recovery_time": 300,
                 },
             },
-
             # 影子测试配置
-            'shadow_testing': {
-                'shadow_ratio': 0.05,
-                'significance_level': 0.05,
-                'min_samples': 100,
-                'promotion_threshold': 0.03,  # 3%改进
+            "shadow_testing": {
+                "shadow_ratio": 0.05,
+                "significance_level": 0.05,
+                "min_samples": 100,
+                "promotion_threshold": 0.03,  # 3%改进
             },
-
             # QSA自适应配置
-            'qsa_adaptive': {
-                'base_ratio': 0.1,
-                'bounds': [0.05, 0.3],
-                'update_frequency': 100,
+            "qsa_adaptive": {
+                "base_ratio": 0.1,
+                "bounds": [0.05, 0.3],
+                "update_frequency": 100,
             },
-
             # QCI坍缩配置
-            'qci_collapse': {
-                'initial_tau_low': 0.5,
-                'initial_tau_high': 2.0,
-                'learning_rate': 0.01,
-                'update_frequency': 1000,
+            "qci_collapse": {
+                "initial_tau_low": 0.5,
+                "initial_tau_high": 2.0,
+                "learning_rate": 0.01,
+                "update_frequency": 1000,
             },
-
             # 学习率配置
-            'learning_rate': {
-                'base_mod_lr': 1e-4,
-                'base_phase_lr': 1e-3,
-                'adapt_frequency': 100,
+            "learning_rate": {
+                "base_mod_lr": 1e-4,
+                "base_phase_lr": 1e-3,
+                "adapt_frequency": 100,
             },
-
             # 异常检测配置
-            'anomaly_detection': {
-                'loss_explosion_threshold': 3.0,  # 相对于基线
-                'grad_explosion_threshold': 10.0,
-                'grad_vanishing_threshold': 1e-7,
-                'performance_degradation_threshold': 2.0,  # 相对于基线
-                'unitarity_violation_threshold': 1e-4,
+            "anomaly_detection": {
+                "loss_explosion_threshold": 3.0,  # 相对于基线
+                "grad_explosion_threshold": 10.0,
+                "grad_vanishing_threshold": 1e-7,
+                "performance_degradation_threshold": 2.0,  # 相对于基线
+                "unitarity_violation_threshold": 1e-4,
             },
-
             # 自动恢复配置
-            'auto_recovery': {
-                'enabled': True,
-                'max_recovery_attempts': 3,
-                'checkpoint_dir': './checkpoints/',
+            "auto_recovery": {
+                "enabled": True,
+                "max_recovery_attempts": 3,
+                "checkpoint_dir": "./checkpoints/",
             },
-
             # 告警配置
-            'alerts': {
-                'enabled': True,
-                'channels': ['log', 'email', 'slack'],
-                'email_recipients': ['admin@example.com'],
-                'slack_webhook': 'https://hooks.slack.com/services/...',
+            "alerts": {
+                "enabled": True,
+                "channels": ["log", "email", "slack"],
+                "email_recipients": ["admin@example.com"],
+                "slack_webhook": "https://hooks.slack.com/services/...",
             },
-
             # 日志配置
-            'logging': {
-                'level': 'INFO',
-                'file': './logs/optimization.log',
-                'rotation': '1d',
-                'retention': '30d',
+            "logging": {
+                "level": "INFO",
+                "file": "./logs/optimization.log",
+                "rotation": "1d",
+                "retention": "30d",
             },
         }
 
     def get(self, key_path: str, default=None):
         """获取配置值，支持点分隔的路径"""
-        keys = key_path.split('.')
+        keys = key_path.split(".")
         value = self.config
 
         for key in keys:
@@ -128,7 +120,7 @@ class OptimizationConfig:
 
     def set(self, key_path: str, value: Any):
         """设置配置值"""
-        keys = key_path.split('.')
+        keys = key_path.split(".")
         config = self.config
 
         for key in keys[:-1]:
@@ -143,7 +135,7 @@ class OptimizationConfig:
         path = save_path or self.config_path
         if path:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, 'w', encoding='utf-8') as f:
+            with open(path, "w", encoding="utf-8") as f:
                 yaml.dump(self.config, f, allow_unicode=True, default_flow_style=False)
         else:
             raise ValueError("未指定保存路径")
@@ -346,44 +338,27 @@ GRAFANA_DASHBOARD_CONFIG = {
                 "title": "训练损失",
                 "type": "timeseries",
                 "targets": [
-                    {
-                        "expr": "training_loss",
-                        "legendFormat": "训练损失"
-                    },
-                    {
-                        "expr": "validation_loss",
-                        "legendFormat": "验证损失"
-                    }
+                    {"expr": "training_loss", "legendFormat": "训练损失"},
+                    {"expr": "validation_loss", "legendFormat": "验证损失"},
                 ],
-                "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+                "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
             },
             {
                 "id": 2,
                 "title": "准确率",
                 "type": "timeseries",
                 "targets": [
-                    {
-                        "expr": "training_accuracy",
-                        "legendFormat": "训练准确率"
-                    },
-                    {
-                        "expr": "validation_accuracy",
-                        "legendFormat": "验证准确率"
-                    }
+                    {"expr": "training_accuracy", "legendFormat": "训练准确率"},
+                    {"expr": "validation_accuracy", "legendFormat": "验证准确率"},
                 ],
-                "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+                "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
             },
             # 硬件监控
             {
                 "id": 3,
                 "title": "GPU利用率",
                 "type": "gauge",
-                "targets": [
-                    {
-                        "expr": "gpu_utilization",
-                        "legendFormat": "利用率"
-                    }
-                ],
+                "targets": [{"expr": "gpu_utilization", "legendFormat": "利用率"}],
                 "fieldConfig": {
                     "defaults": {
                         "unit": "percent",
@@ -393,23 +368,18 @@ GRAFANA_DASHBOARD_CONFIG = {
                             "steps": [
                                 {"value": 0, "color": "green"},
                                 {"value": 70, "color": "yellow"},
-                                {"value": 95, "color": "red"}
+                                {"value": 95, "color": "red"},
                             ]
-                        }
+                        },
                     }
                 },
-                "gridPos": {"h": 6, "w": 6, "x": 0, "y": 8}
+                "gridPos": {"h": 6, "w": 6, "x": 0, "y": 8},
             },
             {
                 "id": 4,
                 "title": "显存使用",
                 "type": "gauge",
-                "targets": [
-                    {
-                        "expr": "gpu_memory_used",
-                        "legendFormat": "已用显存"
-                    }
-                ],
+                "targets": [{"expr": "gpu_memory_used", "legendFormat": "已用显存"}],
                 "fieldConfig": {
                     "defaults": {
                         "unit": "bytes",
@@ -417,103 +387,66 @@ GRAFANA_DASHBOARD_CONFIG = {
                             "steps": [
                                 {"value": 0, "color": "green"},
                                 {"value": 8000000000, "color": "yellow"},
-                                {"value": 10000000000, "color": "red"}
+                                {"value": 10000000000, "color": "red"},
                             ]
-                        }
+                        },
                     }
                 },
-                "gridPos": {"h": 6, "w": 6, "x": 6, "y": 8}
+                "gridPos": {"h": 6, "w": 6, "x": 6, "y": 8},
             },
             # QSA/QCI指标
             {
                 "id": 5,
                 "title": "QSA筛选比例",
                 "type": "timeseries",
-                "targets": [
-                    {
-                        "expr": "qsa_topk_ratio",
-                        "legendFormat": "筛选比例"
-                    }
-                ],
-                "gridPos": {"h": 6, "w": 6, "x": 12, "y": 8}
+                "targets": [{"expr": "qsa_topk_ratio", "legendFormat": "筛选比例"}],
+                "gridPos": {"h": 6, "w": 6, "x": 12, "y": 8},
             },
             {
                 "id": 6,
                 "title": "QCI早退率",
                 "type": "timeseries",
-                "targets": [
-                    {
-                        "expr": "qci_early_exit_rate",
-                        "legendFormat": "早退率"
-                    }
-                ],
-                "gridPos": {"h": 6, "w": 6, "x": 18, "y": 8}
+                "targets": [{"expr": "qci_early_exit_rate", "legendFormat": "早退率"}],
+                "gridPos": {"h": 6, "w": 6, "x": 18, "y": 8},
             },
             # 梯度和学习率
             {
                 "id": 7,
                 "title": "梯度范数",
                 "type": "timeseries",
-                "targets": [
-                    {
-                        "expr": "grad_norm",
-                        "legendFormat": "梯度范数"
-                    }
-                ],
-                "yaxes": [
-                    {"format": "short", "label": "值"},
-                    {"format": "short", "label": "值"}
-                ],
-                "gridPos": {"h": 6, "w": 12, "x": 0, "y": 14}
+                "targets": [{"expr": "grad_norm", "legendFormat": "梯度范数"}],
+                "yaxes": [{"format": "short", "label": "值"}, {"format": "short", "label": "值"}],
+                "gridPos": {"h": 6, "w": 12, "x": 0, "y": 14},
             },
             {
                 "id": 8,
                 "title": "学习率",
                 "type": "timeseries",
                 "targets": [
-                    {
-                        "expr": "qgd_mod_lr",
-                        "legendFormat": "模长学习率"
-                    },
-                    {
-                        "expr": "qgd_phase_lr",
-                        "legendFormat": "相位学习率"
-                    }
+                    {"expr": "qgd_mod_lr", "legendFormat": "模长学习率"},
+                    {"expr": "qgd_phase_lr", "legendFormat": "相位学习率"},
                 ],
                 "yaxes": [
                     {"format": "scientific", "label": "学习率"},
-                    {"format": "scientific", "label": "学习率"}
+                    {"format": "scientific", "label": "学习率"},
                 ],
-                "gridPos": {"h": 6, "w": 12, "x": 12, "y": 14}
+                "gridPos": {"h": 6, "w": 12, "x": 12, "y": 14},
             },
             # 成本监控
             {
                 "id": 9,
                 "title": "每小时成本",
                 "type": "stat",
-                "targets": [
-                    {
-                        "expr": "hourly_cost",
-                        "legendFormat": "成本"
-                    }
-                ],
-                "fieldConfig": {
-                    "defaults": {
-                        "unit": "currencyUSD",
-                        "decimals": 2
-                    }
-                },
-                "gridPos": {"h": 4, "w": 6, "x": 0, "y": 20}
+                "targets": [{"expr": "hourly_cost", "legendFormat": "成本"}],
+                "fieldConfig": {"defaults": {"unit": "currencyUSD", "decimals": 2}},
+                "gridPos": {"h": 4, "w": 6, "x": 0, "y": 20},
             },
             {
                 "id": 10,
                 "title": "每日预算使用率",
                 "type": "stat",
                 "targets": [
-                    {
-                        "expr": "(daily_cost / daily_budget) * 100",
-                        "legendFormat": "使用率"
-                    }
+                    {"expr": "(daily_cost / daily_budget) * 100", "legendFormat": "使用率"}
                 ],
                 "fieldConfig": {
                     "defaults": {
@@ -523,67 +456,44 @@ GRAFANA_DASHBOARD_CONFIG = {
                             "steps": [
                                 {"value": 0, "color": "green"},
                                 {"value": 80, "color": "yellow"},
-                                {"value": 100, "color": "red"}
+                                {"value": 100, "color": "red"},
                             ]
-                        }
+                        },
                     }
                 },
-                "gridPos": {"h": 4, "w": 6, "x": 6, "y": 20}
+                "gridPos": {"h": 4, "w": 6, "x": 6, "y": 20},
             },
             # 酉约束违背
             {
                 "id": 11,
                 "title": "酉约束违背度",
                 "type": "timeseries",
-                "targets": [
-                    {
-                        "expr": "unitarity_violation",
-                        "legendFormat": "违背度"
-                    }
-                ],
+                "targets": [{"expr": "unitarity_violation", "legendFormat": "违背度"}],
                 "yaxes": [
                     {"format": "scientific", "label": "值"},
-                    {"format": "scientific", "label": "值"}
+                    {"format": "scientific", "label": "值"},
                 ],
-                "gridPos": {"h": 6, "w": 12, "x": 12, "y": 20}
+                "gridPos": {"h": 6, "w": 12, "x": 12, "y": 20},
             },
             # 批处理时间
             {
                 "id": 12,
                 "title": "批处理时间",
                 "type": "timeseries",
-                "targets": [
-                    {
-                        "expr": "batch_time",
-                        "legendFormat": "时间"
-                    }
-                ],
-                "fieldConfig": {
-                    "defaults": {
-                        "unit": "s"
-                    }
-                },
-                "gridPos": {"h": 6, "w": 12, "x": 0, "y": 26}
+                "targets": [{"expr": "batch_time", "legendFormat": "时间"}],
+                "fieldConfig": {"defaults": {"unit": "s"}},
+                "gridPos": {"h": 6, "w": 12, "x": 0, "y": 26},
             },
             # 影子测试结果
             {
                 "id": 13,
                 "title": "影子测试改进率",
                 "type": "timeseries",
-                "targets": [
-                    {
-                        "expr": "shadow_test_improvement",
-                        "legendFormat": "{{variant}}"
-                    }
-                ],
-                "fieldConfig": {
-                    "defaults": {
-                        "unit": "percent"
-                    }
-                },
-                "gridPos": {"h": 6, "w": 12, "x": 12, "y": 26}
-            }
-        ]
+                "targets": [{"expr": "shadow_test_improvement", "legendFormat": "{{variant}}"}],
+                "fieldConfig": {"defaults": {"unit": "percent"}},
+                "gridPos": {"h": 6, "w": 12, "x": 12, "y": 26},
+            },
+        ],
     }
 }
 
@@ -592,25 +502,26 @@ GRAFANA_DASHBOARD_CONFIG = {
 # 导出配置到文件
 # ============================================================================
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 创建配置目录
-    os.makedirs('./configs', exist_ok=True)
+    os.makedirs("./configs", exist_ok=True)
 
     # 保存默认配置
     config = OptimizationConfig()
-    config.save('./configs/optimization.yaml')
+    config.save("./configs/optimization.yaml")
 
     # 保存Prometheus配置
-    with open('./configs/prometheus.yml', 'w') as f:
+    with open("./configs/prometheus.yml", "w") as f:
         f.write(PROMETHEUS_CONFIG.strip())
 
     # 保存告警规则
-    with open('./configs/alerts.yml', 'w') as f:
+    with open("./configs/alerts.yml", "w") as f:
         f.write(ALERTS_CONFIG.strip())
 
     # 保存Grafana dashboard
     import json
-    with open('./configs/grafana_dashboard.json', 'w') as f:
+
+    with open("./configs/grafana_dashboard.json", "w") as f:
         json.dump(GRAFANA_DASHBOARD_CONFIG, f, indent=2)
 
     print("配置文件已生成:")

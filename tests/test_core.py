@@ -18,19 +18,39 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from quantum_core import (
-    complex_to_polar, polar_to_complex, normalize_quantum_state,
-    born_probability, born_normalize, von_neumann_entropy,
-    entropy_from_state, complex_inner_product, complex_softmax,
-    complex_dropout, check_unitarity,
-    ModReLU, ModReLUV2, CReLU, ComplexGELU,
-    ComplexLayerNorm, ComplexBatchNorm,
-    CayleyLinear, CayleyLinearSimple,
-    ComplexEmbedding, QuantumPositionalEncoding, LearnedPositionalEncoding,
-    QuantumSuperpositionAttention, PhaseModulation,
-    QuantumEntanglementLayer, EntanglementGate, AdaptiveEntanglementGate,
-    QuantumCollapseInference, POVMProjector,
-    QuantumFFN, QuantumBlock,
-    QuantumArch, QGD,
+    complex_to_polar,
+    polar_to_complex,
+    normalize_quantum_state,
+    born_probability,
+    born_normalize,
+    von_neumann_entropy,
+    entropy_from_state,
+    complex_inner_product,
+    complex_softmax,
+    complex_dropout,
+    check_unitarity,
+    ModReLU,
+    ModReLUV2,
+    CReLU,
+    ComplexGELU,
+    ComplexLayerNorm,
+    ComplexBatchNorm,
+    CayleyLinear,
+    CayleyLinearSimple,
+    ComplexEmbedding,
+    QuantumPositionalEncoding,
+    LearnedPositionalEncoding,
+    QuantumSuperpositionAttention,
+    PhaseModulation,
+    QuantumEntanglementLayer,
+    EntanglementGate,
+    AdaptiveEntanglementGate,
+    QuantumCollapseInference,
+    POVMProjector,
+    QuantumFFN,
+    QuantumBlock,
+    QuantumArch,
+    QGD,
 )
 
 # 使用 pytest 风格但兼容纯 Python 运行
@@ -69,6 +89,7 @@ def approx_allclose(a, b, tol=1e-4, **kwargs):
 # 1. 复数运算测试 (complex_ops)
 # ═══════════════════════════════════════════════════════════════════
 
+
 def test_complex_ops():
     print("\n=== 复数基础运算 (complex_ops) ===")
 
@@ -77,7 +98,10 @@ def test_complex_ops():
     mag, phase = complex_to_polar(z)
     test("polar_to_complex 往返重建", approx_allclose(polar_to_complex(mag, phase), z))
     test("模长非负", (mag >= 0).all().item())
-    test("相位范围 [-pi, pi]", (phase >= -math.pi - 1e-5).all().item() and (phase <= math.pi + 1e-5).all().item())
+    test(
+        "相位范围 [-pi, pi]",
+        (phase >= -math.pi - 1e-5).all().item() and (phase <= math.pi + 1e-5).all().item(),
+    )
 
     # normalize_quantum_state
     z_norm = normalize_quantum_state(z, dim=-1)
@@ -117,26 +141,32 @@ def test_complex_ops():
     # complex_softmax
     cs = complex_softmax(z, dim=-1)
     test("complex_softmax 输出为复数", cs.is_complex())
-    test("complex_softmax 模长归一化", approx_allclose(cs.abs().pow(2).sum(dim=-1), torch.ones(4, 8), tol=1e-4))
+    test(
+        "complex_softmax 模长归一化",
+        approx_allclose(cs.abs().pow(2).sum(dim=-1), torch.ones(4, 8), tol=1e-4),
+    )
 
     # complex_dropout
     z_dropped = complex_dropout(z, p=0.5, training=True)
     test("complex_dropout 输出形状不变", z_dropped.shape == z.shape)
-    test("complex_dropout eval模式不变", torch.allclose(complex_dropout(z, p=0.5, training=False), z))
+    test(
+        "complex_dropout eval模式不变", torch.allclose(complex_dropout(z, p=0.5, training=False), z)
+    )
 
     # check_unitarity
     W = torch.randn(8, 8, dtype=torch.complex64)
     W, _ = torch.linalg.qr(W)  # 酉矩阵
     report = check_unitarity(W)
-    test("QR分解矩阵通过酉性检查", report['is_unitary'])
+    test("QR分解矩阵通过酉性检查", report["is_unitary"])
     W_bad = torch.randn(8, 8, dtype=torch.complex64)
     report_bad = check_unitarity(W_bad)
-    test("随机矩阵不满足酉性", not report_bad['is_unitary'])
+    test("随机矩阵不满足酉性", not report_bad["is_unitary"])
 
 
 # ═══════════════════════════════════════════════════════════════════
 # 2. 激活函数测试 (activations)
 # ═══════════════════════════════════════════════════════════════════
+
 
 def test_activations():
     print("\n=== 激活函数 (activations) ===")
@@ -176,6 +206,7 @@ def test_activations():
 # 3. 归一化测试 (normalization)
 # ═══════════════════════════════════════════════════════════════════
 
+
 def test_normalization():
     print("\n=== 归一化层 (normalization) ===")
 
@@ -190,7 +221,10 @@ def test_normalization():
     # 新实现：基于 2D 增广实数 LN，归一化后均值应接近 0
     # 有仿射变换时 β=0 所以均值≈0，但小样本统计波动需要较大 tolerance
     y_mean = y.mean(dim=-1)
-    test("ComplexLayerNorm 均值≈0", approx_allclose(y_mean.abs(), torch.zeros_like(y_mean.abs()), tol=1.0))
+    test(
+        "ComplexLayerNorm 均值≈0",
+        approx_allclose(y_mean.abs(), torch.zeros_like(y_mean.abs()), tol=1.0),
+    )
     # 梯度
     y.abs().sum().backward()
     test("ComplexLayerNorm 梯度流", z.grad is not None and z.grad.abs().sum() > 0)
@@ -201,10 +235,7 @@ def test_normalization():
     test("ComplexLayerNorm 无仿射输出形状", y2.shape == z.shape)
 
     # ComplexLayerNorm 数值稳定性（大输入）
-    z_large = torch.complex(
-        torch.randn(4, 8, 16) * 100,
-        torch.randn(4, 8, 16) * 100
-    )
+    z_large = torch.complex(torch.randn(4, 8, 16) * 100, torch.randn(4, 8, 16) * 100)
     y_large = ln(z_large)
     test("ComplexLayerNorm 大输入无NaN", not torch.isnan(y_large).any())
     test("ComplexLayerNorm 大输入无Inf", not torch.isinf(y_large).any())
@@ -258,6 +289,7 @@ def test_normalization():
 # 4. 酉矩阵测试 (unitary)
 # ═══════════════════════════════════════════════════════════════════
 
+
 def test_unitary():
     print("\n=== 酉矩阵参数化 (unitary) ===")
 
@@ -268,7 +300,11 @@ def test_unitary():
     W = cayley.unitary_matrix
     test("CayleyLinear is_square=True", cayley.is_square)
     violation = cayley.get_unitarity_violation().item()
-    test(f"CayleyLinear 酉性违背 < 1e-4 (实际 {violation:.2e})", violation < 1e-4, f"violation={violation:.2e}")
+    test(
+        f"CayleyLinear 酉性违背 < 1e-4 (实际 {violation:.2e})",
+        violation < 1e-4,
+        f"violation={violation:.2e}",
+    )
 
     # 前向传播
     x = torch.randn(2, 4, d, dtype=torch.complex64, requires_grad=True)
@@ -288,18 +324,25 @@ def test_unitary():
     y_ns = cayley_ns(x_ns)
     test("CayleyLinear 非方阵前向", y_ns.shape == (2, 4, d * 2))
     test("CayleyLinear 非方阵 is_square=False", not cayley_ns.is_square)
-    test("CayleyLinear 非方阵 violation=inf", math.isinf(cayley_ns.get_unitarity_violation().item()))
+    test(
+        "CayleyLinear 非方阵 violation=inf", math.isinf(cayley_ns.get_unitarity_violation().item())
+    )
 
     # CayleyLinearSimple
     cayley_s = CayleyLinearSimple(d)
     W_s = cayley_s.unitary_matrix
     report_s = check_unitarity(W_s)
-    test("CayleyLinearSimple 酉性", report_s['violation_norm'] < 0.2, f"violation={report_s['violation_norm']:.2e}")
+    test(
+        "CayleyLinearSimple 酉性",
+        report_s["violation_norm"] < 0.2,
+        f"violation={report_s['violation_norm']:.2e}",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
 # 5. 嵌入层测试 (embedding)
 # ═══════════════════════════════════════════════════════════════════
+
 
 def test_embedding():
     print("\n=== 嵌入层 (embedding) ===")
@@ -316,7 +359,10 @@ def test_embedding():
     test("ComplexEmbedding 归一化", approx_allclose(norms, torch.ones_like(norms), tol=1e-5))
     # 梯度
     z.abs().sum().backward()
-    test("ComplexEmbedding 梯度流", emb.embedding.grad is not None and emb.embedding.grad.abs().sum() > 0)
+    test(
+        "ComplexEmbedding 梯度流",
+        emb.embedding.grad is not None and emb.embedding.grad.abs().sum() > 0,
+    )
 
     # QuantumPositionalEncoding
     pe = QuantumPositionalEncoding(dim, max_len=64)
@@ -335,6 +381,7 @@ def test_embedding():
 # 6. QSA 量子叠加注意力测试 (attention)
 # ═══════════════════════════════════════════════════════════════════
 
+
 def test_attention():
     print("\n=== QSA 量子叠加注意力 (attention) ===")
 
@@ -342,11 +389,11 @@ def test_attention():
     x = torch.randn(B, N, D, dtype=torch.complex64, requires_grad=True)
 
     # topk 模式
-    qsa_topk = QuantumSuperpositionAttention(D, num_heads=4, topk_ratio=0.1, mode='topk')
+    qsa_topk = QuantumSuperpositionAttention(D, num_heads=4, topk_ratio=0.1, mode="topk")
     y, metrics = qsa_topk(x, training=True)
     test("QSA topk 输出形状", y.shape == (B, N, D))
-    test("QSA metrics 包含 entropy", 'attention_entropy' in metrics)
-    test("QSA metrics 包含 interference", 'interference_phase_std' in metrics)
+    test("QSA metrics 包含 entropy", "attention_entropy" in metrics)
+    test("QSA metrics 包含 interference", "interference_phase_std" in metrics)
 
     # 梯度
     y.abs().sum().backward()
@@ -354,7 +401,7 @@ def test_attention():
 
     # full 模式
     x2 = torch.randn(B, N, D, dtype=torch.complex64)
-    qsa_full = QuantumSuperpositionAttention(D, num_heads=4, mode='full')
+    qsa_full = QuantumSuperpositionAttention(D, num_heads=4, mode="full")
     y2, m2 = qsa_full(x2, training=False)
     test("QSA full 输出形状", y2.shape == (B, N, D))
 
@@ -373,6 +420,7 @@ def test_attention():
 # 7. QEL 量子纠缠层测试 (entanglement)
 # ═══════════════════════════════════════════════════════════════════
 
+
 def test_entanglement():
     print("\n=== QEL 量子纠缠层 (entanglement) ===")
 
@@ -383,7 +431,7 @@ def test_entanglement():
     x = torch.randn(B, N, D, dtype=torch.complex64, requires_grad=True)
     y, metrics = qel(x, training=True)
     test("QEL 输出形状", y.shape == (B, N, D))
-    test("QEL metrics 包含 strength", 'entanglement_strength' in metrics)
+    test("QEL metrics 包含 strength", "entanglement_strength" in metrics)
 
     # 梯度
     y.abs().sum().backward()
@@ -392,7 +440,7 @@ def test_entanglement():
     # EntanglementGate 酉性（新版使用 Schmidt 纠缠门，验证内部酉矩阵）
     gate = EntanglementGate(dim=D)
     U = gate.get_gate_matrix()
-    test("EntanglementGate 酉性", check_unitarity(U)['is_unitary'])
+    test("EntanglementGate 酉性", check_unitarity(U)["is_unitary"])
 
     # 自适应纠缠
     a = torch.randn(2, 4, D, dtype=torch.complex64)
@@ -400,12 +448,16 @@ def test_entanglement():
     ag = AdaptiveEntanglementGate(D, theta_max=1.0)
     a_out, b_out, strength = ag(a, b)
     test("AdaptiveEntanglementGate 形状", a_out.shape == a.shape and b_out.shape == b.shape)
-    test("AdaptiveEntanglementGate strength 范围", (strength >= 0).all().item() and (strength <= 1.0).all().item())
+    test(
+        "AdaptiveEntanglementGate strength 范围",
+        (strength >= 0).all().item() and (strength <= 1.0).all().item(),
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
 # 8. QCI 量子坍缩推理测试 (collapse)
 # ═══════════════════════════════════════════════════════════════════
+
 
 def test_collapse():
     print("\n=== QCI 量子坍缩推理 (collapse) ===")
@@ -419,11 +471,11 @@ def test_collapse():
     x = torch.randn(B, N, D, dtype=torch.complex64, requires_grad=True)
     y, metrics = qci(x, training=True)
     test("QCI 输出形状", y.shape == (B, N, D))
-    test("QCI metrics 包含 entropy", 'collapse_entropy' in metrics)
-    test("QCI metrics 包含 early_exit_rate", 'collapse_early_exit_rate' in metrics)
+    test("QCI metrics 包含 entropy", "collapse_entropy" in metrics)
+    test("QCI metrics 包含 early_exit_rate", "collapse_early_exit_rate" in metrics)
 
     # 熵范围检查
-    entropy = metrics['collapse_entropy']
+    entropy = metrics["collapse_entropy"]
     max_ent = math.log(D)
     test(f"QCI 熵范围 [0, log({D})]={max_ent:.2f}", 0 <= entropy <= max_ent + 0.1)
 
@@ -437,7 +489,7 @@ def test_collapse():
     test("QCI eval 形状", y_eval.shape == (B, N, D))
 
     # POVM 完整性违背度
-    test("QCI metrics 含 povm_violation", 'collapse_povm_violation' in metrics)
+    test("QCI metrics 含 povm_violation", "collapse_povm_violation" in metrics)
 
     # update_thresholds（自适应模式）
     qci.update_thresholds(0.3, 2.0)
@@ -489,12 +541,13 @@ def test_collapse():
 
     # get_unitarity_violation（QCI 级别）
     uv = qci.get_unitarity_violation()
-    test("QCI 酉性报告有 povm", 'povm_completeness' in uv)
+    test("QCI 酉性报告有 povm", "povm_completeness" in uv)
 
 
 # ═══════════════════════════════════════════════════════════════════
 # 9. FFN_Q 量子前馈网络测试 (ffn)
 # ═══════════════════════════════════════════════════════════════════
+
 
 def test_ffn():
     print("\n=== FFN_Q 量子前馈网络 (ffn) ===")
@@ -557,19 +610,20 @@ def test_ffn():
 
     # W_down 酉性检查（ffn_dim != dim 时非方阵，不检查酉性）
     violations = ffn.get_unitarity_violation()
-    test("FFN_Q 酉性报告有 W_down", 'W_down' in violations)
+    test("FFN_Q 酉性报告有 W_down", "W_down" in violations)
     # ffn_dim=64, dim=32，非方阵，W_down 违背度应为 inf
-    test("FFN_Q 非方阵 W_down 非酉", violations['W_down'] > 100)
+    test("FFN_Q 非方阵 W_down 非酉", violations["W_down"] > 100)
 
     # 方阵 W_down 酉性检查（ffn_dim == dim 时用 Cayley）
     ffn_square = QuantumFFN(D, ffn_dim=D, dropout=0.0)
     v2 = ffn_square.get_unitarity_violation()
-    test("FFN_Q 方阵 W_down Cayley 酉", v2['W_down'] < 0.01)
+    test("FFN_Q 方阵 W_down Cayley 酉", v2["W_down"] < 0.01)
 
 
 # ═══════════════════════════════════════════════════════════════════
 # 10. QuantumBlock 量子块测试 (quantum_block)
 # ═══════════════════════════════════════════════════════════════════
+
 
 def test_quantum_block():
     print("\n=== QuantumBlock 量子块 ===")
@@ -580,7 +634,7 @@ def test_quantum_block():
     qb = QuantumBlock(D, num_heads=4, ffn_dim=64, collapse_enabled=True)
     y, metrics = qb(x, training=True)
     test("QuantumBlock 输出形状", y.shape == (B, N, D))
-    test("QuantumBlock metrics 含 QSA", any('qsa_' in k for k in metrics))
+    test("QuantumBlock metrics 含 QSA", any("qsa_" in k for k in metrics))
 
     # 梯度
     y.abs().sum().backward()
@@ -600,6 +654,7 @@ def test_quantum_block():
 # 11. QuantumArch 完整模型测试 (model)
 # ═══════════════════════════════════════════════════════════════════
 
+
 def test_model():
     print("\n=== QuantumArch 完整模型 ===")
 
@@ -607,19 +662,23 @@ def test_model():
 
     # direct_input 模式
     model = QuantumArch(
-        dim=D, num_layers=2, num_heads=4, ffn_dim=64,
-        collapse_enabled=True, direct_input=True,
+        dim=D,
+        num_layers=2,
+        num_heads=4,
+        ffn_dim=64,
+        collapse_enabled=True,
+        direct_input=True,
     )
     x_real = torch.randn(B, N, D)
-    result = model({'inputs': x_real}, training=True)
-    test("QuantumArch 输出形状", result['output'].shape == (B, N, D))
-    test("QuantumArch 含 qsa_time", 'qsa_time' in result)
-    test("QuantumArch 含 entropy", 'entropy' in result)
-    test("QuantumArch 含 qci_early_exit", 'qci_early_exit' in result)
+    result = model({"inputs": x_real}, training=True)
+    test("QuantumArch 输出形状", result["output"].shape == (B, N, D))
+    test("QuantumArch 含 qsa_time", "qsa_time" in result)
+    test("QuantumArch 含 entropy", "entropy" in result)
+    test("QuantumArch 含 qci_early_exit", "qci_early_exit" in result)
 
     # 反向传播
     model.zero_grad()
-    loss = result['output'].sum()
+    loss = result["output"].sum()
     loss.backward()
     grad_count = sum(1 for p in model.parameters() if p.grad is not None)
     total_params = sum(1 for p in model.parameters())
@@ -644,21 +703,24 @@ def test_model():
     for _ in range(3):
         model.zero_grad()
         x_batch = torch.randn(B, N, D)
-        result = model({'inputs': x_batch}, training=True)
-        result['output'].sum().backward()
+        result = model({"inputs": x_batch}, training=True)
+        result["output"].sum().backward()
         optimizer.step()
     test("QuantumArch 多步训练稳定", True)
 
     # token_ids 模式
-    model_tok = QuantumArch(vocab_size=100, dim=D, num_layers=1, num_heads=4, ffn_dim=64, direct_input=False)
+    model_tok = QuantumArch(
+        vocab_size=100, dim=D, num_layers=1, num_heads=4, ffn_dim=64, direct_input=False
+    )
     ids = torch.randint(0, 100, (B, N))
-    result_tok = model_tok({'token_ids': ids}, training=True)
-    test("QuantumArch token_ids 模式", result_tok['output'].shape == (B, N, D))
+    result_tok = model_tok({"token_ids": ids}, training=True)
+    test("QuantumArch token_ids 模式", result_tok["output"].shape == (B, N, D))
 
 
 # ═══════════════════════════════════════════════════════════════════
 # 12. QGD 优化器测试 (optimizer)
 # ═══════════════════════════════════════════════════════════════════
+
 
 def test_optimizer():
     print("\n=== QGD 量子梯度下降优化器 ===")
@@ -715,18 +777,19 @@ def test_optimizer():
 
     # from_model 工厂方法
     from quantum_core import CayleyLinear, QuantumArch
+
     model_small = QuantumArch(dim=16, num_layers=1, num_heads=2, ffn_dim=32)
     opt_fm = QGD.from_model(model_small, mod_lr=1e-3, phase_lr=1e-2)
     test("QGD from_model 创建成功", opt_fm is not None)
     # 验证参数名称已注册
-    names_registered = 'names' in opt_fm.param_groups[0]
+    names_registered = "names" in opt_fm.param_groups[0]
     test("QGD from_model 参数名称已注册", names_registered)
 
     # from_model 训练测试
     x_fm = torch.randn(2, 4, 16)
     target_fm = torch.randn(2, 4, 16)
-    result_fm = model_small({'inputs': x_fm}, training=True)
-    loss_fm = (result_fm['output'] - target_fm).abs().pow(2).mean()
+    result_fm = model_small({"inputs": x_fm}, training=True)
+    loss_fm = (result_fm["output"] - target_fm).abs().pow(2).mean()
     model_small.zero_grad()
     loss_fm.backward()
     opt_fm.step()
@@ -752,14 +815,20 @@ def test_optimizer():
 # 13. 端到端集成测试
 # ═══════════════════════════════════════════════════════════════════
 
+
 def test_end_to_end():
     print("\n=== 端到端集成测试 ===")
 
     B, N, D = 2, 8, 16
 
     model = QuantumArch(
-        dim=D, num_layers=2, num_heads=2, ffn_dim=32,
-        collapse_enabled=True, direct_input=True, dropout=0.0,
+        dim=D,
+        num_layers=2,
+        num_heads=2,
+        ffn_dim=32,
+        collapse_enabled=True,
+        direct_input=True,
+        dropout=0.0,
     )
     optimizer = QGD.from_model(model, mod_lr=1e-3, phase_lr=1e-2)
     criterion = nn.MSELoss()
@@ -770,10 +839,10 @@ def test_end_to_end():
         model.zero_grad()
         x = torch.randn(B, N, D)
         target = torch.randn(B, N, D)
-        result = model({'inputs': x}, training=True)
-        output = result['output']
+        result = model({"inputs": x}, training=True)
+        output = result["output"]
         if output.shape != target.shape:
-            target = target[..., :output.shape[-1]]
+            target = target[..., : output.shape[-1]]
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
@@ -792,7 +861,7 @@ def test_end_to_end():
 # 运行所有测试
 # ═══════════════════════════════════════════════════════════════════
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("=" * 60)
     print("QuantumArch 核心模块单元测试")
     print("=" * 60)

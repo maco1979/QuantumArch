@@ -67,16 +67,12 @@ class ComplexLayerNorm(nn.Module):
         if elementwise_affine:
             # 复数仿射参数：γ（增益）和 β（偏置）
             # γ 初始化为 1+0i（单位模长，零相位旋转）
-            self.gamma = nn.Parameter(
-                torch.ones(normalized_shape, dtype=torch.complex64)
-            )
+            self.gamma = nn.Parameter(torch.ones(normalized_shape, dtype=torch.complex64))
             # β 初始化为 0+0i（零偏移）
-            self.beta = nn.Parameter(
-                torch.zeros(normalized_shape, dtype=torch.complex64)
-            )
+            self.beta = nn.Parameter(torch.zeros(normalized_shape, dtype=torch.complex64))
         else:
-            self.register_parameter('gamma', None)
-            self.register_parameter('beta', None)
+            self.register_parameter("gamma", None)
+            self.register_parameter("beta", None)
 
     def reset_parameters(self):
         """重置可学习仿射参数到初始值。
@@ -118,8 +114,8 @@ class ComplexLayerNorm(nn.Module):
 
     def extra_repr(self) -> str:
         return (
-            f'normalized_shape={self.normalized_shape}, eps={self.eps}, '
-            f'affine={self.elementwise_affine}'
+            f"normalized_shape={self.normalized_shape}, eps={self.eps}, "
+            f"affine={self.elementwise_affine}"
         )
 
 
@@ -159,27 +155,21 @@ class ComplexBatchNorm(nn.Module):
 
         # 分别对实部和虚部做 BN（底层无仿射变换）
         self.bn_real = nn.BatchNorm1d(
-            num_features, eps, momentum,
-            affine=False, track_running_stats=track_running_stats
+            num_features, eps, momentum, affine=False, track_running_stats=track_running_stats
         )
         self.bn_imag = nn.BatchNorm1d(
-            num_features, eps, momentum,
-            affine=False, track_running_stats=track_running_stats
+            num_features, eps, momentum, affine=False, track_running_stats=track_running_stats
         )
 
         if affine:
             # 复数仿射参数
             # γ 初始化为 1+0i（不改变归一化后的分布）
-            self.gamma = nn.Parameter(
-                torch.ones(num_features, dtype=torch.complex64)
-            )
+            self.gamma = nn.Parameter(torch.ones(num_features, dtype=torch.complex64))
             # β 初始化为 0+0i（零偏移）
-            self.beta = nn.Parameter(
-                torch.zeros(num_features, dtype=torch.complex64)
-            )
+            self.beta = nn.Parameter(torch.zeros(num_features, dtype=torch.complex64))
         else:
-            self.register_parameter('gamma', None)
-            self.register_parameter('beta', None)
+            self.register_parameter("gamma", None)
+            self.register_parameter("beta", None)
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
         """
@@ -214,8 +204,8 @@ class ComplexBatchNorm(nn.Module):
 
     def extra_repr(self) -> str:
         return (
-            f'num_features={self.num_features}, eps={self.eps}, '
-            f'momentum={self.momentum}, affine={self.affine}'
+            f"num_features={self.num_features}, eps={self.eps}, "
+            f"momentum={self.momentum}, affine={self.affine}"
         )
 
 
@@ -252,8 +242,7 @@ class MagnitudeBatchNorm(nn.Module):
 
         # 对模长做标准 BN
         self.bn_mag = nn.BatchNorm1d(
-            num_features, eps, momentum,
-            affine=affine, track_running_stats=track_running_stats
+            num_features, eps, momentum, affine=affine, track_running_stats=track_running_stats
         )
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
@@ -286,7 +275,4 @@ class MagnitudeBatchNorm(nn.Module):
         return mag_norm * torch.exp(1j * phase)
 
     def extra_repr(self) -> str:
-        return (
-            f'num_features={self.num_features}, eps={self.eps}, '
-            f'affine={self.affine}'
-        )
+        return f"num_features={self.num_features}, eps={self.eps}, " f"affine={self.affine}"

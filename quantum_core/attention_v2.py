@@ -40,7 +40,7 @@ class QuantumSuperpositionAttentionOptimized(nn.Module):
         head_dim: Optional[int] = None,
         topk_ratio: float = 0.1,
         dropout: float = 0.0,
-        mode: str = 'topk',
+        mode: str = "topk",
     ):
         super().__init__()
         self.dim = dim
@@ -48,7 +48,7 @@ class QuantumSuperpositionAttentionOptimized(nn.Module):
         self.head_dim = head_dim or (dim // num_heads)
         self.topk_ratio = topk_ratio
         self.mode = mode
-        self.scale = self.head_dim ** -0.5
+        self.scale = self.head_dim**-0.5
 
         assert self.num_heads * self.head_dim == dim
 
@@ -56,7 +56,7 @@ class QuantumSuperpositionAttentionOptimized(nn.Module):
         self.Wq = CayleyLinear(dim, dim, init_scale=0.02)
         self.Wk = CayleyLinear(dim, dim, init_scale=0.02)
         self.Wv = CayleyLinear(dim, dim, init_scale=0.02)
-        
+
         # 输出投影
         self.Wo = CayleyLinear(dim, dim, init_scale=0.02)
 
@@ -84,42 +84,42 @@ class QuantumSuperpositionAttentionOptimized(nn.Module):
         V = V.view(B, N, self.num_heads, self.head_dim).transpose(1, 2)
 
         # 3. 注意力计算 - 使用rsqrt优化
-        rsqrt_scale = self.scale ** -0.5  # rsqrt优化
-        
+        rsqrt_scale = self.scale**-0.5  # rsqrt优化
+
         # 复数内积
-        alpha = torch.einsum('bhnd,bhsd->bhns', Q.conj(), K) * rsqrt_scale
-        
+        alpha = torch.einsum("bhnd,bhsd->bhns", Q.conj(), K) * rsqrt_scale
+
         # 干涉调制
         alpha_mag = alpha.abs()
         phase_shift = self.phase_fn(alpha_mag.detach())
         beta = alpha * torch.exp(1j * phase_shift)
-        
+
         # Born概率 (简化)
         attn_probs = beta.abs() / (beta.abs().sum(dim=-1, keepdim=True) + 1e-8)
-        
+
         # 4. TopK或Full
-        if self.mode == 'topk' and training:
+        if self.mode == "topk" and training:
             output = self._topk_attention(V, attn_probs, B, N)
         else:
             output = self._full_attention(V, attn_probs, attention_mask)
 
         # 5. 多头合并
         output = output.transpose(1, 2).contiguous().view(B, N, D)
-        
+
         # 6. 输出投影
         output = self.Wo(output)
-        
+
         # Dropout
         if training and self.dropout_p > 0:
             output = F.dropout(output, p=self.dropout_p, training=training)
 
         metrics = {
-            'attention_entropy': 0.0,
-            'attention_probs_max': attn_probs.max().item(),
-            'interference_phase_std': phase_shift.std().item(),
-            'topk_ratio_actual': self.topk_ratio,
-            'qsa_mode': self.mode,
-            'optimized': True,
+            "attention_entropy": 0.0,
+            "attention_probs_max": attn_probs.max().item(),
+            "interference_phase_std": phase_shift.std().item(),
+            "topk_ratio_actual": self.topk_ratio,
+            "qsa_mode": self.mode,
+            "optimized": True,
         }
 
         return output, metrics
@@ -129,31 +129,31 @@ class QuantumSuperpositionAttentionOptimized(nn.Module):
             mask = mask.unsqueeze(1).unsqueeze(2)
             attn_probs = attn_probs.masked_fill(mask == 0, 0.0)
             attn_probs = attn_probs / (attn_probs.sum(dim=-1, keepdim=True) + 1e-8)
-        
-        return torch.einsum('bhns,bhsd->bhnd', attn_probs.real, V)
+
+        return torch.einsum("bhns,bhsd->bhnd", attn_probs.real, V)
 
     def _topk_attention(self, V, attn_probs, B, N):
         k = max(1, int(self.topk_ratio * N))
-        
+
         # TopK选择
         topk_probs, topk_indices = torch.topk(attn_probs, k=k, dim=-1)
-        
+
         # 归一化
         topk_probs = topk_probs / (topk_probs.sum(dim=-1, keepdim=True) + 1e-8)
-        
+
         # Gather TopK values
         H = V.shape[1]
         d_h = V.shape[-1]
-        
+
         # 使用efficient gather
         idx_expanded = topk_indices.unsqueeze(-1).expand(-1, -1, -1, -1, d_h)
         V_expanded = V.unsqueeze(3).expand(-1, -1, -1, N, -1)
         V_topk = torch.gather(V_expanded, 3, idx_expanded)
-        
+
         # 加权输出
         weights = topk_probs.unsqueeze(-1)
         output = (weights * V_topk).sum(dim=3)
-        
+
         return output
 
 

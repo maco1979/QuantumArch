@@ -48,7 +48,7 @@ class CayleyLinear(nn.Module):
         self.out_features = out_features
         self.init_scale = init_scale
         self.eps = eps
-        self.is_square = (in_features == out_features)
+        self.is_square = in_features == out_features
 
         # 参数化：存储斜厄米矩阵 Ω 的自由度
         # 斜厄米矩阵：Ω† = -Ω
@@ -59,9 +59,7 @@ class CayleyLinear(nn.Module):
             # 自由度：对角线 d 个虚数 + 上三角 d*(d-1)/2 个复数
             # 总共 d + 2 * d*(d-1)/2 = d² 个实参数
             n_triangular = d * (d - 1) // 2
-            self.omega_diag = nn.Parameter(
-                torch.zeros(d, dtype=torch.float32)  # 对角线虚部
-            )
+            self.omega_diag = nn.Parameter(torch.zeros(d, dtype=torch.float32))  # 对角线虚部
             self.omega_tri = nn.Parameter(
                 torch.zeros(n_triangular, dtype=torch.complex64)  # 上三角复数
             )
@@ -168,7 +166,7 @@ class CayleyLinear(nn.Module):
             标量违背度
         """
         if not self.is_square:
-            return torch.tensor(float('inf'))
+            return torch.tensor(float("inf"))
         W = self.unitary_matrix
         d = W.shape[0]
         I = torch.eye(d, dtype=W.dtype, device=W.device)
@@ -176,8 +174,8 @@ class CayleyLinear(nn.Module):
 
     def extra_repr(self) -> str:
         return (
-            f'in_features={self.in_features}, out_features={self.out_features}, '
-            f'square={self.is_square}, init_scale={self.init_scale}'
+            f"in_features={self.in_features}, out_features={self.out_features}, "
+            f"square={self.is_square}, init_scale={self.init_scale}"
         )
 
 
@@ -202,9 +200,7 @@ class CayleyLinearSimple(nn.Module):
         self.eps = eps
 
         # 可学习的一般复数矩阵
-        self.A = nn.Parameter(
-            torch.randn(features, features, dtype=torch.complex64) * init_scale
-        )
+        self.A = nn.Parameter(torch.randn(features, features, dtype=torch.complex64) * init_scale)
 
     def _get_omega(self) -> torch.Tensor:
         """从 A 构造斜厄米矩阵：Ω = (A - A†) / 2"""
@@ -227,4 +223,4 @@ class CayleyLinearSimple(nn.Module):
         return x @ W
 
     def extra_repr(self) -> str:
-        return f'features={self.features}, eps={self.eps}'
+        return f"features={self.features}, eps={self.eps}"

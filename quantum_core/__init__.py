@@ -38,40 +38,80 @@ from .unitary import CayleyLinear, CayleyLinearSimple
 from .embedding import ComplexEmbedding, QuantumPositionalEncoding, LearnedPositionalEncoding
 from .attention import QuantumSuperpositionAttention, PhaseModulation
 from .entanglement import (
-    QuantumEntanglementLayer, EntanglementGate, AdaptiveEntanglementGate,
-    SchmidtEntanglementGate, SchmidtEntanglementGateV2,
-    QuantumFourierTransform, UnitaryCoupling,
-    concurrence, entanglement_entropy,
+    QuantumEntanglementLayer,
+    EntanglementGate,
+    AdaptiveEntanglementGate,
+    SchmidtEntanglementGate,
+    SchmidtEntanglementGateV2,
+    QuantumFourierTransform,
+    UnitaryCoupling,
+    concurrence,
+    entanglement_entropy,
 )
 from .collapse import QuantumCollapseInference, POVMProjector, AdaptiveThreshold
-from .ffn import QuantumFFN, GatedQuantumFFN, QuantumGate, ComplexSigmoid, ComplexLinear, ComplexBias
+from .ffn import (
+    QuantumFFN,
+    GatedQuantumFFN,
+    QuantumGate,
+    ComplexSigmoid,
+    ComplexLinear,
+    ComplexBias,
+)
 from .quantum_block import QuantumBlock
 from .model import QuantumArch
 from .optimizer import QGD
 
 __all__ = [
     # 基础运算
-    'complex_to_polar', 'polar_to_complex',
-    'normalize_quantum_state', 'born_probability', 'born_normalize',
-    'von_neumann_entropy', 'entropy_from_state',
-    'complex_inner_product', 'complex_softmax', 'complex_dropout',
-    'check_unitarity',
+    "complex_to_polar",
+    "polar_to_complex",
+    "normalize_quantum_state",
+    "born_probability",
+    "born_normalize",
+    "von_neumann_entropy",
+    "entropy_from_state",
+    "complex_inner_product",
+    "complex_softmax",
+    "complex_dropout",
+    "check_unitarity",
     # 激活函数
-    'ModReLU', 'ModReLUV2', 'CReLU', 'ComplexGELU',
+    "ModReLU",
+    "ModReLUV2",
+    "CReLU",
+    "ComplexGELU",
     # 归一化
-    'ComplexLayerNorm', 'ComplexBatchNorm',
+    "ComplexLayerNorm",
+    "ComplexBatchNorm",
     # 酉矩阵
-    'CayleyLinear', 'CayleyLinearSimple',
+    "CayleyLinear",
+    "CayleyLinearSimple",
     # 嵌入
-    'ComplexEmbedding', 'QuantumPositionalEncoding', 'LearnedPositionalEncoding',
+    "ComplexEmbedding",
+    "QuantumPositionalEncoding",
+    "LearnedPositionalEncoding",
     # 核心组件
-    'QuantumSuperpositionAttention', 'PhaseModulation',
-    'QuantumEntanglementLayer', 'EntanglementGate', 'AdaptiveEntanglementGate',
-    'SchmidtEntanglementGate', 'SchmidtEntanglementGateV2',
-    'QuantumFourierTransform', 'UnitaryCoupling',
-    'concurrence', 'entanglement_entropy',
-    'QuantumCollapseInference', 'POVMProjector', 'AdaptiveThreshold',
-    'QuantumFFN', 'GatedQuantumFFN', 'QuantumGate', 'ComplexSigmoid', 'ComplexLinear', 'ComplexBias', 'QuantumBlock',
+    "QuantumSuperpositionAttention",
+    "PhaseModulation",
+    "QuantumEntanglementLayer",
+    "EntanglementGate",
+    "AdaptiveEntanglementGate",
+    "SchmidtEntanglementGate",
+    "SchmidtEntanglementGateV2",
+    "QuantumFourierTransform",
+    "UnitaryCoupling",
+    "concurrence",
+    "entanglement_entropy",
+    "QuantumCollapseInference",
+    "POVMProjector",
+    "AdaptiveThreshold",
+    "QuantumFFN",
+    "GatedQuantumFFN",
+    "QuantumGate",
+    "ComplexSigmoid",
+    "ComplexLinear",
+    "ComplexBias",
+    "QuantumBlock",
     # 完整模型和优化器
-    'QuantumArch', 'QGD',
+    "QuantumArch",
+    "QGD",
 ]

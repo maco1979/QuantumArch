@@ -79,7 +79,7 @@ class QuantumSuperpositionAttention(nn.Module):
         head_dim: Optional[int] = None,
         topk_ratio: float = 0.1,
         dropout: float = 0.0,
-        mode: str = 'topk',
+        mode: str = "topk",
     ):
         super().__init__()
         self.dim = dim
@@ -87,10 +87,11 @@ class QuantumSuperpositionAttention(nn.Module):
         self.head_dim = head_dim or (dim // num_heads)
         self.topk_ratio = topk_ratio
         self.mode = mode
-        self.scale = self.head_dim ** -0.5
+        self.scale = self.head_dim**-0.5
 
-        assert self.num_heads * self.head_dim == dim, \
-            f"num_heads({num_heads}) * head_dim({self.head_dim}) != dim({dim})"
+        assert (
+            self.num_heads * self.head_dim == dim
+        ), f"num_heads({num_heads}) * head_dim({self.head_dim}) != dim({dim})"
 
         # 复数 Q/K/V 投影（使用 Cayley 参数化保证酉性）
         self.Wq = CayleyLinear(dim, dim, init_scale=0.02)
@@ -136,7 +137,7 @@ class QuantumSuperpositionAttention(nn.Module):
 
         # ── 3. 复数内积 + 干涉调制 ──
         # α_ij = ⟨q_i | k_j⟩，形状 (B, num_heads, N, N)
-        alpha = torch.einsum('bhnd,bhsd->bhns', Q.conj(), K) * self.scale
+        alpha = torch.einsum("bhnd,bhsd->bhns", Q.conj(), K) * self.scale
 
         # 干涉调制：β = α · exp(i · f(|α|))
         alpha_mag = alpha.abs()
@@ -150,7 +151,7 @@ class QuantumSuperpositionAttention(nn.Module):
         attn_entropy = von_neumann_entropy(attn_probs, dim=-1)  # (B, H, N)
 
         # ── 6. Top-K 筛选或完整注意力 ──
-        if self.mode == 'topk' and training:
+        if self.mode == "topk" and training:
             output = self._topk_attention(V, attn_probs, B, N)
         else:
             output = self._full_attention(V, attn_probs, attention_mask)
@@ -168,11 +169,11 @@ class QuantumSuperpositionAttention(nn.Module):
 
         # 构建指标
         metrics = {
-            'attention_entropy': attn_entropy.mean().item(),
-            'attention_probs_max': attn_probs.max().item(),
-            'interference_phase_std': phase_shift.std().item(),
-            'topk_ratio_actual': self.topk_ratio,
-            'qsa_mode': self.mode,
+            "attention_entropy": attn_entropy.mean().item(),
+            "attention_probs_max": attn_probs.max().item(),
+            "interference_phase_std": phase_shift.std().item(),
+            "topk_ratio_actual": self.topk_ratio,
+            "qsa_mode": self.mode,
         }
 
         return output, metrics
@@ -202,7 +203,7 @@ class QuantumSuperpositionAttention(nn.Module):
         # 使用概率加权聚合（概率是实数，V 是复数）
         # 将实数概率转为复数以兼容 einsum
         weights = attn_probs.to(V.dtype)
-        return torch.einsum('bhns,bhsd->bhnd', weights, V)
+        return torch.einsum("bhns,bhsd->bhnd", weights, V)
 
     def _topk_attention(
         self,
@@ -253,7 +254,7 @@ class QuantumSuperpositionAttention(nn.Module):
         Args:
             mode: 'topk'（高效推理）或 'full'（完整 O(n²) 注意力，用于验证）
         """
-        if mode not in ('topk', 'full'):
+        if mode not in ("topk", "full"):
             raise ValueError(f"mode 必须为 'topk' 或 'full'，收到: {mode!r}")
         self.mode = mode
 
@@ -271,7 +272,7 @@ class QuantumSuperpositionAttention(nn.Module):
 
     def extra_repr(self) -> str:
         return (
-            f'dim={self.dim}, num_heads={self.num_heads}, '
-            f'head_dim={self.head_dim}, topk_ratio={self.topk_ratio}, '
-            f'mode={self.mode}'
+            f"dim={self.dim}, num_heads={self.num_heads}, "
+            f"head_dim={self.head_dim}, topk_ratio={self.topk_ratio}, "
+            f"mode={self.mode}"
         )

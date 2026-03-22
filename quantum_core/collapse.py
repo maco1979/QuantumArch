@@ -73,9 +73,7 @@ class POVMProjector(nn.Module):
         # POVM 权重（正数，softplus 保证 α_m > 0）
         # 初始化 softplus(w) ≈ 1 → w = ln(e-1) ≈ 0.541
         # 这样初始时 Σ α_m · |φ_m⟩⟨φ_m| ≈ Σ |φ_m⟩⟨φ_m| ≈ I（对正交基）
-        self.povm_weights = nn.Parameter(
-            torch.full((out_dim,), math.log(math.e - 1))
-        )
+        self.povm_weights = nn.Parameter(torch.full((out_dim,), math.log(math.e - 1)))
 
     def get_operators(self) -> torch.Tensor:
         """获取 POVM 正定算子 E_m 的权重。
@@ -106,15 +104,13 @@ class POVMProjector(nn.Module):
 
         # 向量化：Σ_m α_m · |φ_m⟩⟨φ_m| = basis^† · diag(α) · basis
         # basis^†: (in_dim, out_dim), diag(α) @ basis: (out_dim, in_dim)
-        weighted_basis = weights.unsqueeze(-1) * basis          # (out_dim, in_dim)
-        sum_E = basis.conj().T @ weighted_basis                  # (in_dim, in_dim)
+        weighted_basis = weights.unsqueeze(-1) * basis  # (out_dim, in_dim)
+        sum_E = basis.conj().T @ weighted_basis  # (in_dim, in_dim)
 
         identity = torch.eye(self.in_dim, dtype=torch.complex64, device=basis.device)
         return (sum_E - identity).abs().pow(2).sum().sqrt()
 
-    def forward(
-        self, psi: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, psi: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """对量子态应用 POVM 测量。
 
         测量过程：
@@ -162,7 +158,7 @@ class POVMProjector(nn.Module):
         return collapsed, probs
 
     def extra_repr(self) -> str:
-        return f'in_dim={self.in_dim}, out_dim={self.out_dim}'
+        return f"in_dim={self.in_dim}, out_dim={self.out_dim}"
 
 
 class AdaptiveThreshold(nn.Module):
@@ -202,15 +198,15 @@ class AdaptiveThreshold(nn.Module):
         self.max_entropy = max_entropy(dim)
 
         # 当前阈值
-        self.register_buffer('tau_low', torch.tensor(tau_low_init))
-        self.register_buffer('tau_high', torch.tensor(tau_high_init))
+        self.register_buffer("tau_low", torch.tensor(tau_low_init))
+        self.register_buffer("tau_high", torch.tensor(tau_high_init))
 
         # 训练步数
-        self.register_buffer('step_count', torch.tensor(0))
+        self.register_buffer("step_count", torch.tensor(0))
 
         # 熵历史（用于动态调整 τ_high）
-        self.register_buffer('entropy_sum', torch.tensor(0.0))
-        self.register_buffer('entropy_count', torch.tensor(0))
+        self.register_buffer("entropy_sum", torch.tensor(0.0))
+        self.register_buffer("entropy_count", torch.tensor(0))
 
     @torch.no_grad()
     def update(self, entropy_batch: torch.Tensor, training: bool = True):
@@ -236,10 +232,7 @@ class AdaptiveThreshold(nn.Module):
 
         # τ_low 指数衰减
         steps = self.step_count.item() / 100
-        new_tau_low = max(
-            self.tau_low_init * (self.decay_rate ** steps),
-            self.tau_min
-        )
+        new_tau_low = max(self.tau_low_init * (self.decay_rate**steps), self.tau_min)
         self.tau_low.fill_(new_tau_low)
 
         # τ_high 基于历史熵分布的 90 百分位
@@ -257,10 +250,10 @@ class AdaptiveThreshold(nn.Module):
 
     def extra_repr(self) -> str:
         return (
-            f'dim={self.dim}, '
-            f'tau_low={self.tau_low.item():.3f}, '
-            f'tau_high={self.tau_high.item():.3f}, '
-            f'max_entropy={self.max_entropy:.3f}'
+            f"dim={self.dim}, "
+            f"tau_low={self.tau_low.item():.3f}, "
+            f"tau_high={self.tau_high.item():.3f}, "
+            f"max_entropy={self.max_entropy:.3f}"
         )
 
 
@@ -315,8 +308,8 @@ class QuantumCollapseInference(nn.Module):
                 decay_rate=0.95,
             )
         else:
-            self.register_buffer('tau_low', torch.tensor(tau_low))
-            self.register_buffer('tau_high', torch.tensor(tau_high))
+            self.register_buffer("tau_low", torch.tensor(tau_low))
+            self.register_buffer("tau_high", torch.tensor(tau_high))
             self.threshold = None
 
     @property
@@ -432,14 +425,14 @@ class QuantumCollapseInference(nn.Module):
         povm_violation = self.povm.get_completeness_violation().item()
 
         metrics = {
-            'collapse_entropy': avg_entropy,
-            'collapse_entropy_max': entropy.max().item(),
-            'collapse_entropy_min': entropy.min().item(),
-            'collapse_early_exit_rate': early_exit_rate,
-            'collapse_tau_low': tau_low,
-            'collapse_tau_high': tau_high,
-            'collapse_max_entropy': max_ent,
-            'collapse_povm_violation': povm_violation,
+            "collapse_entropy": avg_entropy,
+            "collapse_entropy_max": entropy.max().item(),
+            "collapse_entropy_min": entropy.min().item(),
+            "collapse_early_exit_rate": early_exit_rate,
+            "collapse_tau_low": tau_low,
+            "collapse_tau_high": tau_high,
+            "collapse_max_entropy": max_ent,
+            "collapse_povm_violation": povm_violation,
         }
 
         return output, metrics
@@ -470,19 +463,19 @@ class QuantumCollapseInference(nn.Module):
             dict: 包含 POVM 完整性违背度
         """
         return {
-            'povm_completeness': self.povm.get_completeness_violation().item(),
+            "povm_completeness": self.povm.get_completeness_violation().item(),
         }
 
     def extra_repr(self) -> str:
         if self.adaptive_tau and self.threshold is not None:
             return (
-                f'dim={self.dim}, collapse_dim={self.collapse_dim}, '
-                f'adaptive_tau=True, '
-                f'tau_low={self.threshold.tau_low.item():.3f}, '
-                f'tau_high={self.threshold.tau_high.item():.3f}'
+                f"dim={self.dim}, collapse_dim={self.collapse_dim}, "
+                f"adaptive_tau=True, "
+                f"tau_low={self.threshold.tau_low.item():.3f}, "
+                f"tau_high={self.threshold.tau_high.item():.3f}"
             )
         return (
-            f'dim={self.dim}, collapse_dim={self.collapse_dim}, '
-            f'tau_low={self.tau_low.item():.3f}, '
-            f'tau_high={self.tau_high.item():.3f}'
+            f"dim={self.dim}, collapse_dim={self.collapse_dim}, "
+            f"tau_low={self.tau_low.item():.3f}, "
+            f"tau_high={self.tau_high.item():.3f}"
         )

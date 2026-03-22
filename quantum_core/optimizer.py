@@ -34,16 +34,16 @@ import re
 
 # Cayley 参数名称模式
 _CAYLEY_PATTERNS = [
-    r'omega_diag',    # CayleyLinear 的对角虚部参数（实数）
-    r'omega_tri',     # CayleyLinear 的上三角参数（复数）
-    r'\.A$',          # CayleyLinearSimple 的一般矩阵参数（复数）
-    r'_cayley_',      # 通用 Cayley 相关参数
+    r"omega_diag",  # CayleyLinear 的对角虚部参数（实数）
+    r"omega_tri",  # CayleyLinear 的上三角参数（复数）
+    r"\.A$",  # CayleyLinearSimple 的一般矩阵参数（复数）
+    r"_cayley_",  # 通用 Cayley 相关参数
 ]
 
 # QGD 内部酉耦合参数（需要 Cayley 处理）
 _UNITARY_PARAM_PATTERNS = [
-    r'phase$',        # UnitaryCoupling diagonal 模式的相位参数
-    r'mix$',          # UnitaryCoupling diagonal 模式的混合参数
+    r"phase$",  # UnitaryCoupling diagonal 模式的相位参数
+    r"mix$",  # UnitaryCoupling diagonal 模式的混合参数
 ]
 
 
@@ -72,14 +72,13 @@ def _is_unitary_param(name: str) -> bool:
     Returns:
         是否为酉变换参数
     """
-    return _is_cayley_param(name) or any(
-        re.search(p, name) for p in _UNITARY_PARAM_PATTERNS
-    )
+    return _is_cayley_param(name) or any(re.search(p, name) for p in _UNITARY_PARAM_PATTERNS)
 
 
 # ──────────────────────────────────────────────
 # Wirtinger 导数工具
 # ──────────────────────────────────────────────
+
 
 def wirtinger_to_polar(
     z: torch.Tensor,
@@ -112,7 +111,7 @@ def wirtinger_to_polar(
     """
     r = z.abs().float().clamp(min=eps)
     # z̄ · g 的实部和虚部
-    conj_z_grad = (z.conj() * grad)
+    conj_z_grad = z.conj() * grad
     grad_r = conj_z_grad.real / r
     grad_phi = conj_z_grad.imag / r
     return grad_r, grad_phi
@@ -121,6 +120,7 @@ def wirtinger_to_polar(
 # ──────────────────────────────────────────────
 # 主优化器
 # ──────────────────────────────────────────────
+
 
 class QGD(Optimizer):
     """量子梯度下降优化器。
@@ -194,17 +194,17 @@ class QGD(Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-            mod_lr = group['mod_lr']
-            phase_lr = group['phase_lr']
-            cayley_lr = group['cayley_lr']
-            real_lr = group['real_lr']
-            beta1, beta2 = group['betas']
-            eps = group['eps']
-            weight_decay = group['weight_decay']
-            max_grad_norm = group['max_grad_norm']
-            amsgrad = group['amsgrad']
+            mod_lr = group["mod_lr"]
+            phase_lr = group["phase_lr"]
+            cayley_lr = group["cayley_lr"]
+            real_lr = group["real_lr"]
+            beta1, beta2 = group["betas"]
+            eps = group["eps"]
+            weight_decay = group["weight_decay"]
+            max_grad_norm = group["max_grad_norm"]
+            amsgrad = group["amsgrad"]
 
-            for p in group['params']:
+            for p in group["params"]:
                 if p.grad is None:
                     continue
 
@@ -224,20 +224,20 @@ class QGD(Optimizer):
                 # 初始化状态
                 state = self.state[p]
                 if len(state) == 0:
-                    state['step'] = 0
+                    state["step"] = 0
                     # Adam 状态（模长/相位/标准 各一套）
-                    state['exp_avg'] = torch.zeros_like(p, dtype=torch.float32)
-                    state['exp_avg_sq'] = torch.zeros_like(p, dtype=torch.float32)
+                    state["exp_avg"] = torch.zeros_like(p, dtype=torch.float32)
+                    state["exp_avg_sq"] = torch.zeros_like(p, dtype=torch.float32)
                     if amsgrad:
-                        state['max_exp_avg_sq'] = torch.zeros_like(p, dtype=torch.float32)
+                        state["max_exp_avg_sq"] = torch.zeros_like(p, dtype=torch.float32)
                     # 第二套 Adam 状态（相位专用）
-                    state['phase_exp_avg'] = torch.zeros_like(p, dtype=torch.float32)
-                    state['phase_exp_avg_sq'] = torch.zeros_like(p, dtype=torch.float32)
+                    state["phase_exp_avg"] = torch.zeros_like(p, dtype=torch.float32)
+                    state["phase_exp_avg_sq"] = torch.zeros_like(p, dtype=torch.float32)
                     if amsgrad:
-                        state['phase_max_exp_avg_sq'] = torch.zeros_like(p, dtype=torch.float32)
+                        state["phase_max_exp_avg_sq"] = torch.zeros_like(p, dtype=torch.float32)
 
-                state['step'] += 1
-                t = state['step']
+                state["step"] += 1
+                t = state["step"]
 
                 is_complex = p.dtype in (torch.complex64, torch.complex128)
                 is_cayley = _is_cayley_param(self._get_param_name(p))
@@ -245,18 +245,29 @@ class QGD(Optimizer):
                 if is_cayley or not is_complex:
                     # ── Cayley 参数 / 实数参数：标准 Adam 更新 ──
                     self._adam_step(
-                        p, grad, state, t,
+                        p,
+                        grad,
+                        state,
+                        t,
                         lr=cayley_lr if is_cayley else real_lr,
-                        beta1=beta1, beta2=beta2, eps=eps,
+                        beta1=beta1,
+                        beta2=beta2,
+                        eps=eps,
                         weight_decay=weight_decay if not is_complex else 0.0,
                         amsgrad=amsgrad,
                     )
                 else:
                     # ── 普通复数参数：Wirtinger 极坐标分离更新 ──
                     self._wirtinger_step(
-                        p, grad, state, t,
-                        mod_lr=mod_lr, phase_lr=phase_lr,
-                        beta1=beta1, beta2=beta2, eps=eps,
+                        p,
+                        grad,
+                        state,
+                        t,
+                        mod_lr=mod_lr,
+                        phase_lr=phase_lr,
+                        beta1=beta1,
+                        beta2=beta2,
+                        eps=eps,
                         weight_decay=weight_decay,
                         amsgrad=amsgrad,
                     )
@@ -296,41 +307,41 @@ class QGD(Optimizer):
             grad_r = grad_r + weight_decay * magnitude
 
         # 3. 模长 Adam 更新
-        state['exp_avg'].mul_(beta1).add_(grad_r, alpha=1 - beta1)
-        state['exp_avg_sq'].mul_(beta2).addcmul_(grad_r, grad_r, value=1 - beta2)
+        state["exp_avg"].mul_(beta1).add_(grad_r, alpha=1 - beta1)
+        state["exp_avg_sq"].mul_(beta2).addcmul_(grad_r, grad_r, value=1 - beta2)
 
         if amsgrad:
             # 维护最大值
             torch.max(
-                state['max_exp_avg_sq'],
-                state['exp_avg_sq'] / (1 - beta2 ** t),
-                out=state['max_exp_avg_sq']
+                state["max_exp_avg_sq"],
+                state["exp_avg_sq"] / (1 - beta2**t),
+                out=state["max_exp_avg_sq"],
             )
-            mod_denom = state['max_exp_avg_sq'].sqrt() + eps
+            mod_denom = state["max_exp_avg_sq"].sqrt() + eps
         else:
-            bias_corr2 = 1 - beta2 ** t
-            mod_denom = (state['exp_avg_sq'].sqrt() / math.sqrt(bias_corr2)) + eps
+            bias_corr2 = 1 - beta2**t
+            mod_denom = (state["exp_avg_sq"].sqrt() / math.sqrt(bias_corr2)) + eps
 
-        bias_corr1 = 1 - beta1 ** t
-        mod_step = (state['exp_avg'] / bias_corr1) / mod_denom
+        bias_corr1 = 1 - beta1**t
+        mod_step = (state["exp_avg"] / bias_corr1) / mod_denom
 
         # 4. 相位 Adam 更新（独立的动量和方差估计）
-        state['phase_exp_avg'].mul_(beta1).add_(grad_phi, alpha=1 - beta1)
-        state['phase_exp_avg_sq'].mul_(beta2).addcmul_(grad_phi, grad_phi, value=1 - beta2)
+        state["phase_exp_avg"].mul_(beta1).add_(grad_phi, alpha=1 - beta1)
+        state["phase_exp_avg_sq"].mul_(beta2).addcmul_(grad_phi, grad_phi, value=1 - beta2)
 
         if amsgrad:
             torch.max(
-                state['phase_max_exp_avg_sq'],
-                state['phase_exp_avg_sq'] / (1 - beta2 ** t),
-                out=state['phase_max_exp_avg_sq']
+                state["phase_max_exp_avg_sq"],
+                state["phase_exp_avg_sq"] / (1 - beta2**t),
+                out=state["phase_max_exp_avg_sq"],
             )
-            phase_denom = state['phase_max_exp_avg_sq'].sqrt() + eps
+            phase_denom = state["phase_max_exp_avg_sq"].sqrt() + eps
         else:
-            bias_corr2_phase = 1 - beta2 ** t
-            phase_denom = (state['phase_exp_avg_sq'].sqrt() / math.sqrt(bias_corr2_phase)) + eps
+            bias_corr2_phase = 1 - beta2**t
+            phase_denom = (state["phase_exp_avg_sq"].sqrt() / math.sqrt(bias_corr2_phase)) + eps
 
-        bias_corr1_phase = 1 - beta1 ** t
-        phase_step = (state['phase_exp_avg'] / bias_corr1_phase) / phase_denom
+        bias_corr1_phase = 1 - beta1**t
+        phase_step = (state["phase_exp_avg"] / bias_corr1_phase) / phase_denom
 
         # 5. 应用更新
         new_mag = magnitude - mod_lr * mod_step
@@ -368,17 +379,17 @@ class QGD(Optimizer):
             p_real = torch.view_as_real(p.data)  # (..., 2)
             grad_real = torch.view_as_real(grad)  # (..., 2)
             # Adam 状态也需要 view_as_real
-            state_exp_avg = state['exp_avg']
-            state_exp_avg_sq = state['exp_avg_sq']
+            state_exp_avg = state["exp_avg"]
+            state_exp_avg_sq = state["exp_avg_sq"]
 
             # 如果状态维度不匹配（首次处理复数），需要重建
             if state_exp_avg.shape != p_real.shape:
-                state['exp_avg'] = torch.zeros_like(p_real, dtype=torch.float32)
-                state['exp_avg_sq'] = torch.zeros_like(p_real, dtype=torch.float32)
+                state["exp_avg"] = torch.zeros_like(p_real, dtype=torch.float32)
+                state["exp_avg_sq"] = torch.zeros_like(p_real, dtype=torch.float32)
                 if amsgrad:
-                    state['max_exp_avg_sq'] = torch.zeros_like(p_real, dtype=torch.float32)
-                state_exp_avg = state['exp_avg']
-                state_exp_avg_sq = state['exp_avg_sq']
+                    state["max_exp_avg_sq"] = torch.zeros_like(p_real, dtype=torch.float32)
+                state_exp_avg = state["exp_avg"]
+                state_exp_avg_sq = state["exp_avg_sq"]
 
             grad_f = grad_real.float()
 
@@ -390,16 +401,16 @@ class QGD(Optimizer):
 
             if amsgrad:
                 torch.max(
-                    state['max_exp_avg_sq'],
-                    state_exp_avg_sq / (1 - beta2 ** t),
-                    out=state['max_exp_avg_sq']
+                    state["max_exp_avg_sq"],
+                    state_exp_avg_sq / (1 - beta2**t),
+                    out=state["max_exp_avg_sq"],
                 )
-                denom = state['max_exp_avg_sq'].sqrt() + eps
+                denom = state["max_exp_avg_sq"].sqrt() + eps
             else:
-                bias_corr2 = 1 - beta2 ** t
+                bias_corr2 = 1 - beta2**t
                 denom = (state_exp_avg_sq.sqrt() / math.sqrt(bias_corr2)) + eps
 
-            bias_corr1 = 1 - beta1 ** t
+            bias_corr1 = 1 - beta1**t
             step = (state_exp_avg / bias_corr1) / denom
 
             p_real.data.add_(-lr * step)
@@ -410,22 +421,22 @@ class QGD(Optimizer):
             if weight_decay > 0:
                 grad_f = grad_f + weight_decay * p.float()
 
-            state['exp_avg'].mul_(beta1).add_(grad_f, alpha=1 - beta1)
-            state['exp_avg_sq'].mul_(beta2).addcmul_(grad_f, grad_f, value=1 - beta2)
+            state["exp_avg"].mul_(beta1).add_(grad_f, alpha=1 - beta1)
+            state["exp_avg_sq"].mul_(beta2).addcmul_(grad_f, grad_f, value=1 - beta2)
 
             if amsgrad:
                 torch.max(
-                    state['max_exp_avg_sq'],
-                    state['exp_avg_sq'] / (1 - beta2 ** t),
-                    out=state['max_exp_avg_sq']
+                    state["max_exp_avg_sq"],
+                    state["exp_avg_sq"] / (1 - beta2**t),
+                    out=state["max_exp_avg_sq"],
                 )
-                denom = state['max_exp_avg_sq'].sqrt() + eps
+                denom = state["max_exp_avg_sq"].sqrt() + eps
             else:
-                bias_corr2 = 1 - beta2 ** t
-                denom = (state['exp_avg_sq'].sqrt() / math.sqrt(bias_corr2)) + eps
+                bias_corr2 = 1 - beta2**t
+                denom = (state["exp_avg_sq"].sqrt() / math.sqrt(bias_corr2)) + eps
 
-            bias_corr1 = 1 - beta1 ** t
-            step = (state['exp_avg'] / bias_corr1) / denom
+            bias_corr1 = 1 - beta1**t
+            step = (state["exp_avg"] / bias_corr1) / denom
 
             p.copy_(p.float() - lr * step)
 
@@ -436,18 +447,18 @@ class QGD(Optimizer):
         如果无法确定名称，返回空字符串。
         """
         # 尝试从 state 中缓存的名字获取
-        if '_name' in self.state.get(p, {}):
-            return self.state[p]['_name']
+        if "_name" in self.state.get(p, {}):
+            return self.state[p]["_name"]
 
         # 在参数组中查找
         for group in self.param_groups:
-            if 'names' in group:
-                for name, param in zip(group['names'], group['params']):
+            if "names" in group:
+                for name, param in zip(group["names"], group["params"]):
                     if param is p:
-                        self.state[p]['_name'] = name
+                        self.state[p]["_name"] = name
                         return name
 
-        return ''
+        return ""
 
     def add_param_group(self, param_group: dict):
         """添加参数组，支持 'names' 字段用于 Cayley 参数识别。
@@ -478,11 +489,11 @@ class QGD(Optimizer):
         grad_norm_sq = 0.0
 
         for group in self.param_groups:
-            for p in group['params']:
+            for p in group["params"]:
                 if p.grad is None:
                     continue
                 state = self.state.get(p, {})
-                step = state.get('step', 0)
+                step = state.get("step", 0)
                 global_step = max(global_step, step)
 
                 is_complex = p.dtype in (torch.complex64, torch.complex128)
@@ -497,11 +508,11 @@ class QGD(Optimizer):
                     n_real += 1
 
         return {
-            'global_step': global_step,
-            'complex_params': n_complex,
-            'cayley_params': n_cayley,
-            'real_params': n_real,
-            'grad_norm_complex': float(grad_norm_sq ** 0.5),
+            "global_step": global_step,
+            "complex_params": n_complex,
+            "cayley_params": n_cayley,
+            "real_params": n_real,
+            "grad_norm_complex": float(grad_norm_sq**0.5),
         }
 
     @classmethod
@@ -513,7 +524,7 @@ class QGD(Optimizer):
         cayley_lr: Optional[float] = None,
         real_lr: Optional[float] = None,
         **kwargs,
-    ) -> 'QGD':
+    ) -> "QGD":
         """从模型创建优化器，自动识别参数类型。
 
         自动将模型的命名参数分组，识别 Cayley 参数和普通复数参数。
@@ -549,7 +560,7 @@ class QGD(Optimizer):
 
         # 注册参数名称用于 Cayley 识别
         if all_names:
-            optimizer.param_groups[0]['names'] = all_names
+            optimizer.param_groups[0]["names"] = all_names
 
         return optimizer
 
@@ -559,4 +570,4 @@ class QGD(Optimizer):
 # ──────────────────────────────────────────────
 
 # 保留旧版 QGD 类名（QGD 本身就是新版）
-__all__ = ['QGD']
+__all__ = ["QGD"]

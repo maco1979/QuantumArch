@@ -62,7 +62,7 @@ class ComplexSigmoid(nn.Module):
         return torch.complex(torch.sigmoid(z.real), torch.sigmoid(z.imag))
 
     def extra_repr(self) -> str:
-        return 'ComplexSigmoid(σ_C)'
+        return "ComplexSigmoid(σ_C)"
 
 
 class ComplexLinear(nn.Module):
@@ -92,7 +92,7 @@ class ComplexLinear(nn.Module):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.is_square = (in_features == out_features)
+        self.is_square = in_features == out_features
 
         if use_cayley and self.is_square:
             # 方阵：使用 Cayley 酉投影
@@ -107,14 +107,8 @@ class ComplexLinear(nn.Module):
             if init_std is None:
                 # 类似 nn.Linear 的默认初始化，但考虑复数方差
                 init_std = 1.0 / math.sqrt(in_features)
-            nn.init.normal_(
-                self.linear.weight.data.real,
-                std=init_std / math.sqrt(2)
-            )
-            nn.init.normal_(
-                self.linear.weight.data.imag,
-                std=init_std / math.sqrt(2)
-            )
+            nn.init.normal_(self.linear.weight.data.real, std=init_std / math.sqrt(2))
+            nn.init.normal_(self.linear.weight.data.imag, std=init_std / math.sqrt(2))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.linear(x)
@@ -133,13 +127,10 @@ class ComplexLinear(nn.Module):
         """返回酉性违背度。Cayley 时严格为 0（或极小），否则可能很大。"""
         if self._is_cayley:
             return self.linear.get_unitarity_violation().item()
-        return float('inf')
+        return float("inf")
 
     def extra_repr(self) -> str:
-        return (
-            f'in={self.in_features}, out={self.out_features}, '
-            f'cayley={self._is_cayley}'
-        )
+        return f"in={self.in_features}, out={self.out_features}, " f"cayley={self._is_cayley}"
 
 
 class QuantumGate(nn.Module):
@@ -179,7 +170,7 @@ class QuantumGate(nn.Module):
         return x * gate
 
     def extra_repr(self) -> str:
-        return f'dim={self.dim}'
+        return f"dim={self.dim}"
 
 
 class GatedQuantumFFN(nn.Module):
@@ -210,7 +201,7 @@ class GatedQuantumFFN(nn.Module):
         dim: int,
         ffn_dim: Optional[int] = None,
         dropout: float = 0.0,
-        activation: str = 'modrelu',
+        activation: str = "modrelu",
         gate_proj_dim: Optional[int] = None,
     ):
         super().__init__()
@@ -221,7 +212,8 @@ class GatedQuantumFFN(nn.Module):
 
         # 上投影（非方阵复数投影，扩展维度）
         self.W_up = ComplexLinear(
-            dim, self.ffn_dim,
+            dim,
+            self.ffn_dim,
             use_cayley=False,
             init_std=1.0 / math.sqrt(dim),
         )
@@ -230,10 +222,11 @@ class GatedQuantumFFN(nn.Module):
         self.bias_up = ComplexBias(self.ffn_dim)
 
         # 复数激活函数
-        if activation == 'modrelu':
+        if activation == "modrelu":
             self.activation = ModReLU(self.ffn_dim)
-        elif activation == 'gelu':
+        elif activation == "gelu":
             from .activations import ComplexGELU
+
             self.activation = ComplexGELU()
         else:
             raise ValueError(f"Unknown activation: {activation}")
@@ -246,18 +239,18 @@ class GatedQuantumFFN(nn.Module):
 
         # 下投影（方阵时使用 Cayley 酉投影）
         self.W_down = ComplexLinear(
-            self.ffn_dim, dim,
+            self.ffn_dim,
+            dim,
             use_cayley=True,  # 自动判断：方阵用 Cayley，非方阵用普通投影
             init_std=1.0 / math.sqrt(self.ffn_dim),
         )
 
         # LayerNorm
         from .normalization import ComplexLayerNorm
+
         self.norm = ComplexLayerNorm(dim)
 
-    def forward(
-        self, x: torch.Tensor, training: bool = True
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
         """
         Args:
             x: 复数输入 (batch, seq_len, dim)
@@ -291,10 +284,7 @@ class GatedQuantumFFN(nn.Module):
         return residual + down
 
     def extra_repr(self) -> str:
-        return (
-            f'dim={self.dim}, ffn_dim={self.ffn_dim}, '
-            f'dropout={self.dropout_p}'
-        )
+        return f"dim={self.dim}, ffn_dim={self.ffn_dim}, " f"dropout={self.dropout_p}"
 
 
 class QuantumFFN(nn.Module):
@@ -318,7 +308,7 @@ class QuantumFFN(nn.Module):
         dropout: float = 0.0,
         use_glu: bool = False,
         use_gating: bool = False,
-        activation: str = 'modrelu',
+        activation: str = "modrelu",
     ):
         super().__init__()
         self.dim = dim
@@ -349,7 +339,8 @@ class QuantumFFN(nn.Module):
             # 上投影（非方阵复数投影，扩展维度）
             # 使用 ComplexLinear 而非裸 nn.Linear，获得更好的复数初始化
             self.W_up = ComplexLinear(
-                dim, self.ffn_dim,
+                dim,
+                self.ffn_dim,
                 use_cayley=False,
                 init_std=1.0 / math.sqrt(dim),
             )
@@ -358,28 +349,29 @@ class QuantumFFN(nn.Module):
             self.bias_up = ComplexBias(self.ffn_dim)
 
             # 复数激活函数
-            if activation == 'modrelu':
+            if activation == "modrelu":
                 self.activation = ModReLU(self.ffn_dim)
-            elif activation == 'gelu':
+            elif activation == "gelu":
                 from .activations import ComplexGELU
+
                 self.activation = ComplexGELU()
             else:
                 raise ValueError(f"Unknown activation: {activation}")
 
             # 下投影（方阵时使用 Cayley 酉投影，自动判断）
             self.W_down = ComplexLinear(
-                self.ffn_dim, dim,
+                self.ffn_dim,
+                dim,
                 use_cayley=True,
                 init_std=1.0 / math.sqrt(self.ffn_dim),
             )
 
             # LayerNorm
             from .normalization import ComplexLayerNorm
+
             self.norm = ComplexLayerNorm(dim)
 
-    def forward(
-        self, x: torch.Tensor, training: bool = True
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
         """
         Args:
             x: 复数输入 (batch, seq_len, dim)
@@ -415,16 +407,16 @@ class QuantumFFN(nn.Module):
     def get_unitarity_violation(self) -> Dict[str, float]:
         """返回各酉性约束的违背度。"""
         violations = {}
-        violations['W_down'] = self.W_down.get_unitarity_violation()
-        if self.use_glu and hasattr(self, 'gate'):
+        violations["W_down"] = self.W_down.get_unitarity_violation()
+        if self.use_glu and hasattr(self, "gate"):
             # 门控矩阵不是酉矩阵，但可以检查条件数
             gate_weight = self.gate.W_gate
             cond = torch.linalg.cond(gate_weight).item()
-            violations['gate_cond'] = cond
+            violations["gate_cond"] = cond
         return violations
 
     def extra_repr(self) -> str:
         return (
-            f'dim={self.dim}, ffn_dim={self.ffn_dim}, '
-            f'gated={self.use_glu}, dropout={self.dropout_p}'
+            f"dim={self.dim}, ffn_dim={self.ffn_dim}, "
+            f"gated={self.use_glu}, dropout={self.dropout_p}"
         )

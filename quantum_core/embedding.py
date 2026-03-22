@@ -36,9 +36,7 @@ class ComplexEmbedding(nn.Module):
         self.normalize = normalize
 
         # 复数嵌入矩阵
-        self.embedding = nn.Parameter(
-            torch.randn(vocab_size, dim, dtype=torch.complex64) * scale
-        )
+        self.embedding = nn.Parameter(torch.randn(vocab_size, dim, dtype=torch.complex64) * scale)
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
         """
@@ -56,7 +54,7 @@ class ComplexEmbedding(nn.Module):
         return z
 
     def extra_repr(self) -> str:
-        return f'vocab_size={self.embedding.shape[0]}, dim={self.dim}, normalize={self.normalize}'
+        return f"vocab_size={self.embedding.shape[0]}, dim={self.dim}, normalize={self.normalize}"
 
 
 class QuantumPositionalEncoding(nn.Module):
@@ -88,9 +86,7 @@ class QuantumPositionalEncoding(nn.Module):
         self.omega_z = nn.Parameter(torch.randn(1, max_len, dim) * 0.01)
         self.omega_x = nn.Parameter(torch.randn(1, max_len, dim) * 0.01)
 
-    def forward(
-        self, x: torch.Tensor, training: bool = True
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
         """
         Args:
             x: 复数输入 (batch, seq_len, dim)
@@ -126,7 +122,7 @@ class QuantumPositionalEncoding(nn.Module):
         return x_rotated
 
     def extra_repr(self) -> str:
-        return f'dim={self.dim}, max_len={self.omega_z.shape[1]}'
+        return f"dim={self.dim}, max_len={self.omega_z.shape[1]}"
 
 
 class LearnedPositionalEncoding(nn.Module):
@@ -150,6 +146,7 @@ class LearnedPositionalEncoding(nn.Module):
 
         if training and self.dropout_p > 0:
             from .complex_ops import complex_dropout
+
             x = complex_dropout(x, p=self.dropout_p, training=True)
 
         return x

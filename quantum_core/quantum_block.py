@@ -47,7 +47,7 @@ class QuantumBlock(nn.Module):
         tau_low: float = 0.5,
         tau_high: float = 1.5,
         dropout: float = 0.0,
-        qsa_mode: str = 'topk',
+        qsa_mode: str = "topk",
     ):
         super().__init__()
         self.dim = dim
@@ -107,11 +107,11 @@ class QuantumBlock(nn.Module):
 
         # QSA 量子叠加注意力
         x_attn, qsa_metrics = self.qsa(x_norm, training=training)
-        metrics.update({f'qsa_{k}': v for k, v in qsa_metrics.items()})
+        metrics.update({f"qsa_{k}": v for k, v in qsa_metrics.items()})
 
         # QEL 量子纠缠层（替代残差连接的非线性融合）
         x_entangled, qel_metrics = self.qel(x_attn, training=training)
-        metrics.update({f'qel_{k}': v for k, v in qel_metrics.items()})
+        metrics.update({f"qel_{k}": v for k, v in qel_metrics.items()})
 
         # 残差连接
         x = residual + x_entangled
@@ -122,23 +122,23 @@ class QuantumBlock(nn.Module):
         # ── 可选: QCI 坍缩推理 ──
         if self.qci is not None and training:
             x, collapse_metrics = self.qci(x, training=training)
-            metrics.update({f'qci_{k}': v for k, v in collapse_metrics.items()})
+            metrics.update({f"qci_{k}": v for k, v in collapse_metrics.items()})
 
         return x, metrics
 
     def update_parameters(self, **kwargs):
         """更新可调参数（由优化系统调用）。"""
-        if 'qsa_topk_ratio' in kwargs:
-            self.qsa.topk_ratio = kwargs['qsa_topk_ratio']
-        if 'qci_tau_low' in kwargs and self.qci is not None:
+        if "qsa_topk_ratio" in kwargs:
+            self.qsa.topk_ratio = kwargs["qsa_topk_ratio"]
+        if "qci_tau_low" in kwargs and self.qci is not None:
             # 获取当前 tau_high（可能在 threshold 子模块或直接属性上）
             if self.qci.threshold is not None:
                 current_tau_high = self.qci.threshold.tau_high.item()
             else:
                 current_tau_high = self.qci.tau_high.item()
             self.qci.update_thresholds(
-                tau_low=kwargs['qci_tau_low'],
-                tau_high=kwargs.get('qci_tau_high', current_tau_high),
+                tau_low=kwargs["qci_tau_low"],
+                tau_high=kwargs.get("qci_tau_high", current_tau_high),
             )
 
     def get_complexity_report(self, seq_len: int = 512) -> Dict[str, str]:
@@ -157,21 +157,21 @@ class QuantumBlock(nn.Module):
         ffn_d = self.ffn_q.ffn_dim
 
         return {
-            'QSA（复数投影 Q/K/V）': f'O(N·D²) ≈ {N * D * D // 1000}K ops',
-            'QSA（内积矩阵）': (
-                f'O(N·k·D) ≈ {N * k * D // 1000}K ops  [topk={k}/{N}]'
-                if self.qsa.mode == 'topk'
-                else f'O(N²·D) ≈ {N * N * D // 1000}K ops  [full]'
+            "QSA（复数投影 Q/K/V）": f"O(N·D²) ≈ {N * D * D // 1000}K ops",
+            "QSA（内积矩阵）": (
+                f"O(N·k·D) ≈ {N * k * D // 1000}K ops  [topk={k}/{N}]"
+                if self.qsa.mode == "topk"
+                else f"O(N²·D) ≈ {N * N * D // 1000}K ops  [full]"
             ),
-            'QEL（局部纠缠）': f'O(N·D²) ≈ {N * D * D // 1000}K ops',
-            'QEL（QFT）': f'O(N·D·log N) ≈ {int(N * D * (N.bit_length())) // 1000}K ops',
-            'FFN_Q': f'O(N·D·ffn_d) ≈ {N * D * ffn_d // 1000}K ops  [ffn_dim={ffn_d}]',
-            'QCI（POVM）': f'O(N·D·collapse_dim)' if self.collapse_enabled else 'disabled',
-            '总计（估算）': f'≈ {(N*D*D*4 + N*k*D + N*D*ffn_d) // 1_000_000}M ops / block',
+            "QEL（局部纠缠）": f"O(N·D²) ≈ {N * D * D // 1000}K ops",
+            "QEL（QFT）": f"O(N·D·log N) ≈ {int(N * D * (N.bit_length())) // 1000}K ops",
+            "FFN_Q": f"O(N·D·ffn_d) ≈ {N * D * ffn_d // 1000}K ops  [ffn_dim={ffn_d}]",
+            "QCI（POVM）": f"O(N·D·collapse_dim)" if self.collapse_enabled else "disabled",
+            "总计（估算）": f"≈ {(N*D*D*4 + N*k*D + N*D*ffn_d) // 1_000_000}M ops / block",
         }
 
     def extra_repr(self) -> str:
         return (
-            f'dim={self.dim}, collapse={self.collapse_enabled}, '
-            f'heads={self.qsa.num_heads}, topk={self.qsa.topk_ratio}'
+            f"dim={self.dim}, collapse={self.collapse_enabled}, "
+            f"heads={self.qsa.num_heads}, topk={self.qsa.topk_ratio}"
         )

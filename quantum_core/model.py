@@ -55,7 +55,7 @@ class QuantumArch(nn.Module):
         tau_low: float = 0.5,
         tau_high: float = 1.5,
         dropout: float = 0.0,
-        qsa_mode: str = 'topk',
+        qsa_mode: str = "topk",
         output_dim: Optional[int] = None,
         direct_input: bool = False,
     ):
@@ -67,7 +67,7 @@ class QuantumArch(nn.Module):
         self.direct_input = direct_input
 
         # 嵌入层（仅在 token_ids 输入模式下使用）
-        self.use_embedding = (vocab_size > 0 and not direct_input)
+        self.use_embedding = vocab_size > 0 and not direct_input
         if self.use_embedding:
             self.embedding = ComplexEmbedding(vocab_size, dim, normalize=True)
             self.pos_encoding = LearnedPositionalEncoding(dim, max_seq_len, dropout)
@@ -77,20 +77,22 @@ class QuantumArch(nn.Module):
             self.input_proj = nn.Linear(dim, dim, bias=False).to(torch.complex64)
 
         # 量子块堆叠
-        self.blocks = nn.ModuleList([
-            QuantumBlock(
-                dim=dim,
-                num_heads=num_heads,
-                ffn_dim=ffn_dim,
-                topk_ratio=topk_ratio,
-                collapse_enabled=collapse_enabled,
-                tau_low=tau_low,
-                tau_high=tau_high,
-                dropout=dropout,
-                qsa_mode=qsa_mode,
-            )
-            for _ in range(num_layers)
-        ])
+        self.blocks = nn.ModuleList(
+            [
+                QuantumBlock(
+                    dim=dim,
+                    num_heads=num_heads,
+                    ffn_dim=ffn_dim,
+                    topk_ratio=topk_ratio,
+                    collapse_enabled=collapse_enabled,
+                    tau_low=tau_low,
+                    tau_high=tau_high,
+                    dropout=dropout,
+                    qsa_mode=qsa_mode,
+                )
+                for _ in range(num_layers)
+            ]
+        )
 
         # 最终归一化
         self.final_norm = ComplexLayerNorm(dim)
@@ -111,7 +113,7 @@ class QuantumArch(nn.Module):
         for module in self.modules():
             if isinstance(module, nn.Linear):
                 # 跳过 ComplexLinear 内部的 nn.Linear（它们有自己的初始化）
-                if hasattr(module, '_complex_linear_parent'):
+                if hasattr(module, "_complex_linear_parent"):
                     continue
                 if module.weight.dtype in (torch.complex64, torch.complex128):
                     nn.init.normal_(module.weight.real, std=0.02)
@@ -146,17 +148,17 @@ class QuantumArch(nn.Module):
 
         # ── 输入处理 ──
         if isinstance(x, dict):
-            if 'token_ids' in x:
-                z = self.embedding(x['token_ids'])
+            if "token_ids" in x:
+                z = self.embedding(x["token_ids"])
                 z = self.pos_encoding(z, training=training)
-            elif 'inputs' in x:
-                raw = x['inputs']
+            elif "inputs" in x:
+                raw = x["inputs"]
                 if raw.dtype != torch.complex64 and raw.dtype != torch.complex128:
                     # 实数输入 -> 复数投影
                     z = torch.complex(raw, torch.zeros_like(raw))
                 else:
                     z = raw
-                if hasattr(self, 'input_proj'):
+                if hasattr(self, "input_proj"):
                     z = self.input_proj(z)
             else:
                 raise ValueError(f"Unexpected keys in input dict: {list(x.keys())}")
@@ -166,7 +168,7 @@ class QuantumArch(nn.Module):
                 z = torch.complex(raw, torch.zeros_like(raw))
             else:
                 z = raw
-            if hasattr(self, 'input_proj'):
+            if hasattr(self, "input_proj"):
                 z = self.input_proj(z)
 
         # ── 量子块堆叠 ──
@@ -178,11 +180,11 @@ class QuantumArch(nn.Module):
 
             qsa_time = time.time() - start_time
             qsa_total_time += qsa_time
-            all_metrics[f'block_{i}'] = layer_metrics
+            all_metrics[f"block_{i}"] = layer_metrics
 
             # 检查是否应该早退
             if self.collapse_enabled and training:
-                collapse_key = f'qci_collapse_early_exit_rate'
+                collapse_key = f"qci_collapse_early_exit_rate"
                 if collapse_key in layer_metrics:
                     if layer_metrics[collapse_key] > 0.95:
                         early_exit = True
@@ -197,33 +199,31 @@ class QuantumArch(nn.Module):
 
         # 计算全局熵
         with torch.no_grad():
-            entropy = von_neumann_entropy(
-                born_normalize(z, dim=-1), dim=-1
-            ).mean().item()
+            entropy = von_neumann_entropy(born_normalize(z, dim=-1), dim=-1).mean().item()
 
         return {
-            'output': output,
-            'qsa_time': qsa_total_time,
-            'qci_early_exit': early_exit,
-            'entropy': entropy,
-            'hidden_state': z,  # 复数隐状态（可选使用）
-            'layer_metrics': all_metrics,
+            "output": output,
+            "qsa_time": qsa_total_time,
+            "qci_early_exit": early_exit,
+            "entropy": entropy,
+            "hidden_state": z,  # 复数隐状态（可选使用）
+            "layer_metrics": all_metrics,
         }
 
     def update_parameters(self, **kwargs):
         """更新可调参数（兼容 MockQuantumArch 接口）。"""
-        if 'qsa_topk_ratio' in kwargs:
-            self.qsa_topk_ratio = kwargs['qsa_topk_ratio']
+        if "qsa_topk_ratio" in kwargs:
+            self.qsa_topk_ratio = kwargs["qsa_topk_ratio"]
             for block in self.blocks:
-                block.update_parameters(qsa_topk_ratio=kwargs['qsa_topk_ratio'])
+                block.update_parameters(qsa_topk_ratio=kwargs["qsa_topk_ratio"])
 
-        if 'qci_tau_low' in kwargs:
-            self.qci_tau_low = kwargs['qci_tau_low']
-            tau_high = kwargs.get('qci_tau_high', self.qci_tau_high)
+        if "qci_tau_low" in kwargs:
+            self.qci_tau_low = kwargs["qci_tau_low"]
+            tau_high = kwargs.get("qci_tau_high", self.qci_tau_high)
             self.qci_tau_high = tau_high
             for block in self.blocks:
                 block.update_parameters(
-                    qci_tau_low=kwargs['qci_tau_low'],
+                    qci_tau_low=kwargs["qci_tau_low"],
                     qci_tau_high=tau_high,
                 )
 
@@ -232,18 +232,18 @@ class QuantumArch(nn.Module):
         report = {}
         for i, block in enumerate(self.blocks):
             # 检查 QSA 中的 Wq, Wk, Wv, Wo（仅方阵）
-            for name in ['Wq', 'Wk', 'Wv', 'Wo']:
+            for name in ["Wq", "Wk", "Wv", "Wo"]:
                 layer = getattr(block.qsa, name, None)
-                if hasattr(layer, 'is_square') and layer.is_square:
-                    key = f'block{i}_{name}'
+                if hasattr(layer, "is_square") and layer.is_square:
+                    key = f"block{i}_{name}"
                     report[key] = layer.get_unitarity_violation().item()
 
             # 检查 FFN 中的 W_down（通过 ComplexLinear 包装器）
-            layer = getattr(block.ffn_q, 'W_down', None)
+            layer = getattr(block.ffn_q, "W_down", None)
             if layer is not None:
                 # ComplexLinear 有 is_cayley 属性
-                if hasattr(layer, 'is_cayley') and layer.is_cayley:
-                    report[f'block{i}_ffn_down'] = layer.get_unitarity_violation()
+                if hasattr(layer, "is_cayley") and layer.is_cayley:
+                    report[f"block{i}_ffn_down"] = layer.get_unitarity_violation()
 
         return report
 
@@ -275,22 +275,19 @@ class QuantumArch(nn.Module):
                 equiv = n
                 real_params += n
 
-            if 'embedding' in name or 'pos_encoding' in name:
+            if "embedding" in name or "pos_encoding" in name:
                 embedding_params += equiv
-            elif 'blocks' in name:
+            elif "blocks" in name:
                 block_params += equiv
 
-        total = sum(
-            p.numel() * (2 if p.is_complex() else 1)
-            for p in self.parameters()
-        )
+        total = sum(p.numel() * (2 if p.is_complex() else 1) for p in self.parameters())
 
         return {
-            'total_real_equiv': total,
-            'complex_params': complex_params,
-            'real_params': real_params,
-            'embedding_params': embedding_params,
-            'block_params': block_params,
+            "total_real_equiv": total,
+            "complex_params": complex_params,
+            "real_params": real_params,
+            "embedding_params": embedding_params,
+            "block_params": block_params,
         }
 
     def complexity_summary(self, seq_len: int = 512) -> str:
@@ -302,7 +299,7 @@ class QuantumArch(nn.Module):
             格式化的多行摘要
         """
         param_info = self.count_parameters()
-        total_m = param_info['total_real_equiv'] / 1e6
+        total_m = param_info["total_real_equiv"] / 1e6
 
         lines = [
             f"=== QuantumArch 复杂度摘要 ===",
@@ -325,7 +322,7 @@ class QuantumArch(nn.Module):
 
     def extra_repr(self) -> str:
         return (
-            f'dim={self.dim}, layers={self.num_layers}, '
-            f'collapse={self.collapse_enabled}, '
-            f'output_dim={self.output_dim}'
+            f"dim={self.dim}, layers={self.num_layers}, "
+            f"collapse={self.collapse_enabled}, "
+            f"output_dim={self.output_dim}"
         )
