@@ -1,3 +1,58 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "QuantumArch"
+version = "0.1.0"
+description = "Quantum-Inspired Neural Architecture with Complex-Valued Dynamics"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "maco1979"},
+]
+urls = {Homepage = "https://github.com/maco1979/QuantumArch"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "pyyaml>=6.0",
+    "prometheus-client>=0.17.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "pyright>=1.1.300",
+    "isort>=5.12.0",
+]
+
+[tool.setuptools]
+# 显式列出所有顶层包，解决 flat layout 多包歧义问题
+packages = [
+    "design",
+    "experiments",
+    "engineering",
+    "paper_system",
+    "quantum_core",
+    "verification_suite",
+    "optimization_system",
+]
+
 [tool.pyright]
 include = ["quantum_core", "tests", "benchmark", "optimization_system"]
 exclude = [
@@ -13,7 +68,7 @@ reportOptionalMemberAccess = "warning"
 reportGeneralTypeIssues = "warning"
 pythonVersion = "3.9"
 pythonPlatform = "Linux"
-typeCheckingMode = "basic"  # 对 PyTorch 使用 basic 模式
+typeCheckingMode = "basic"
 stubPath = ""
 
 [tool.black]
