@@ -95,23 +95,19 @@ class POVMProjector(nn.Module):
         理想情况：Σ_m α_m · |φ_m⟩⟨φ_m| ≈ I
         违背度：||Σ E_m - I||_F
 
+        使用批量矩阵运算替代 Python for 循环，提升大 out_dim 时的效率：
+            Σ_m α_m · φ_m† ⊗ φ_m  =  basis† @ diag(α) @ basis
+
         Returns:
             violation: Frobenius 范数标量
         """
         weights = self.get_operators()  # (out_dim,)
         basis = self.measurement_basis  # (out_dim, in_dim)
 
-        # 构造 Σ E_m = Σ α_m · φ_m† · φ_m
-        # 每个外积 φ_m† · φ_m 是 (in_dim, in_dim)
-        sum_E = torch.zeros(
-            self.in_dim, self.in_dim, dtype=torch.complex64,
-            device=basis.device
-        )
-        for m in range(self.out_dim):
-            phi_m = basis[m]  # (in_dim,)
-            alpha_m = weights[m]
-            # 外积 |φ_m⟩⟨φ_m|
-            sum_E += alpha_m * torch.outer(phi_m.conj(), phi_m)
+        # 向量化：Σ_m α_m · |φ_m⟩⟨φ_m| = basis^† · diag(α) · basis
+        # basis^†: (in_dim, out_dim), diag(α) @ basis: (out_dim, in_dim)
+        weighted_basis = weights.unsqueeze(-1) * basis          # (out_dim, in_dim)
+        sum_E = basis.conj().T @ weighted_basis                  # (in_dim, in_dim)
 
         identity = torch.eye(self.in_dim, dtype=torch.complex64, device=basis.device)
         return (sum_E - identity).abs().pow(2).sum().sqrt()
