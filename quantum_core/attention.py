@@ -247,6 +247,28 @@ class QuantumSuperpositionAttention(nn.Module):
 
         return output
 
+    def set_mode(self, mode: str):
+        """切换 QSA 运行模式。
+
+        Args:
+            mode: 'topk'（高效推理）或 'full'（完整 O(n²) 注意力，用于验证）
+        """
+        if mode not in ('topk', 'full'):
+            raise ValueError(f"mode 必须为 'topk' 或 'full'，收到: {mode!r}")
+        self.mode = mode
+
+    def set_topk_ratio(self, ratio: float):
+        """动态调整 Top-K 筛选比例。
+
+        可被优化系统在线调用，无需重新初始化模型。
+
+        Args:
+            ratio: 新的 Top-K 比例，范围 (0, 1]
+        """
+        if not 0 < ratio <= 1.0:
+            raise ValueError(f"topk_ratio 必须在 (0, 1] 内，收到: {ratio}")
+        self.topk_ratio = ratio
+
     def extra_repr(self) -> str:
         return (
             f'dim={self.dim}, num_heads={self.num_heads}, '
