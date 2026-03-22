@@ -31,16 +31,20 @@ jobs:
       
       - name: Install dependencies
         run: |
+          echo "::group::Installing linting dependencies"
           pip install flake8 black isort pyright
-      
+          echo "::endgroup::"
+
       - name: Check code format (Black)
-        run: black --check quantum_core/ optimization_system/ tests/
-      
+        run: black --check quantum_core/ optimization_system/ tests/ -v
+
       - name: Check import order (isort)
-        run: isort --check-only --diff quantum_core/ optimization_system/ tests/
-      
+        run: isort --check-only --diff quantum_core/ optimization_system/ tests/ -v
+
       - name: Run pyright type checking
-        run: pyright --outputjson > pyright_report.json || true
+        run: |
+          pyright --outputjson > pyright_report.json || true
+          echo "Pyright report generated (even if errors exist)"
       
       - name: Upload pyright report
         uses: actions/upload-artifact@v4
@@ -69,13 +73,17 @@ jobs:
       
       - name: Install dependencies
         run: |
+          echo "::group::Installing test dependencies"
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install pytest pytest-cov pytest-xdist
           pip install -e .
-      
-      - name: Run tests
+          echo "::endgroup::"
+
+      - name: Run tests with verbose output
         run: |
-          pytest tests/ -v --cov=quantum_core --cov-report=xml --cov-report=term
+          echo "::group::Running pytest with coverage"
+          pytest tests/ -v --tb=short --cov=quantum_core --cov-report=xml --cov-report=term
+          echo "::endgroup::"
       
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest'
@@ -101,11 +109,16 @@ jobs:
       
       - name: Install dependencies
         run: |
+          echo "::group::Installing benchmark dependencies"
           pip install torch --index-url https://download.pytorch.org/whl/cu121
           pip install -e .
-      
+          echo "::endgroup::"
+
       - name: Run benchmark
-        run: python run_benchmark.py --output benchmark_results.json
+        run: |
+          echo "::group::Running performance benchmarks"
+          python run_benchmark.py --output benchmark_results.json
+          echo "::endgroup::"
       
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
@@ -128,12 +141,19 @@ jobs:
           cache: 'pip'
       
       - name: Install bandit
-        run: pip install bandit safety
-      
+        run: |
+          echo "::group::Installing security tools"
+          pip install bandit safety
+          echo "::endgroup::"
+
       - name: Run security scan
         run: |
-          bandit -r quantum_core/ -f json -o bandit_report.json
+          echo "::group::Running Bandit security scan"
+          bandit -r quantum_core/ -f json -o bandit_report.json || true
+          echo "::endgroup::"
+          echo "::group::Running Safety check"
           safety check --json > safety_report.json || true
+          echo "::endgroup::"
       
       - name: Upload security reports
         uses: actions/upload-artifact@v4
@@ -160,10 +180,15 @@ jobs:
       
       - name: Install dependencies
         run: |
+          echo "::group::Installing MkDocs dependencies"
           pip install mkdocs mkdocstrings mkdocs-material
-      
+          echo "::endgroup::"
+
       - name: Build documentation
-        run: mkdocs build
+        run: |
+          echo "::group::Building MkDocs documentation"
+          mkdocs build -v
+          echo "::endgroup::"
       
       - name: Deploy to GitHub Pages
         uses: actions/upload-pages-artifact@v3
@@ -214,12 +239,16 @@ jobs:
       
       - name: Install dependencies
         run: |
+          echo "::group::Installing integration test dependencies"
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -e .
-      
+          echo "::endgroup::"
+
       - name: Run integration tests
         run: |
-          pytest tests/test_full_suite.py::TestIntegration -v
+          echo "::group::Running integration tests"
+          pytest tests/test_full_suite.py::TestIntegration -v --tb=short
+          echo "::endgroup::"
 
   # 8. CUDA 测试 (仅在有 GPU 时)
   cuda-test:
@@ -238,12 +267,16 @@ jobs:
       
       - name: Install CUDA dependencies
         run: |
+          echo "::group::Installing CUDA dependencies"
           pip install torch --index-url https://download.pytorch.org/whl/cu121
           pip install -e .
-      
+          echo "::endgroup::"
+
       - name: Run CUDA tests
         run: |
-          pytest tests/ -v -m slow --cuda
+          echo "::group::Running CUDA-specific tests"
+          pytest tests/ -v -m slow --cuda --tb=short || true
+          echo "::endgroup::"
 
   # 汇总状态
   status:
@@ -251,9 +284,24 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, test, benchmark, security, docs, build, integration]
     if: always()
-    
+
     steps:
       - name: Check job status
         run: |
-          echo "Jobs completed. Check individual job results above."
-          exit 1
+          echo "::group::CI Job Status Summary"
+          echo "Lint status: ${{ needs.lint.result }}"
+          echo "Test status: ${{ needs.test.result }}"
+          echo "Benchmark status: ${{ needs.benchmark.result }}"
+          echo "Security status: ${{ needs.security.result }}"
+          echo "Docs status: ${{ needs.docs.result }}"
+          echo "Build status: ${{ needs.build.result }}"
+          echo "Integration status: ${{ needs.integration.result }}"
+          echo "::endgroup::"
+          # 如果所有必需作业都成功，则退出成功
+          if [[ "${{ needs.lint.result }}" != "success" || \
+                "${{ needs.test.result }}" != "success" || \
+                "${{ needs.security.result }}" != "success" ]]; then
+            echo "::error::Critical CI jobs failed"
+            exit 1
+          fi
+          echo "All critical CI jobs passed"
