@@ -74,26 +74,26 @@ class CayleyLinear(nn.Module):
     def _get_skew_hermitian(self) -> torch.Tensor:
         """从存储参数重建斜厄米矩阵 Ω。
 
+        使用向量化索引替代双层 Python for 循环，在大维度 d 时性能显著更优。
+
         Returns:
             Ω: (d, d) 斜厄米矩阵，复数类型
         """
         d = self.in_features
+        device = self.omega_diag.device
 
         # 构建全零矩阵
-        Omega = torch.zeros(d, d, dtype=torch.complex64, device=self.omega_diag.device)
+        Omega = torch.zeros(d, d, dtype=torch.complex64, device=device)
 
         # 填充对角线：纯虚数
         diag_imag = self.omega_diag * 1j
-        Omega.view(-1)[::d + 1] = diag_imag
+        Omega.diagonal().copy_(diag_imag)
 
-        # 填充上三角
-        idx = 0
-        for i in range(d):
-            for j in range(i + 1, d):
-                Omega[i, j] = self.omega_tri[idx]
-                # 斜厄米性质：Ω[j,i] = -conj(Ω[i,j])
-                Omega[j, i] = -self.omega_tri[idx].conj()
-                idx += 1
+        # 向量化填充上三角（使用 torch.triu_indices）
+        rows, cols = torch.triu_indices(d, d, offset=1, device=device)
+        Omega[rows, cols] = self.omega_tri
+        # 斜厄米性质：Ω[j,i] = -conj(Ω[i,j])
+        Omega[cols, rows] = -self.omega_tri.conj()
 
         return Omega
 
