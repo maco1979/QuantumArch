@@ -391,12 +391,11 @@ class QuantumFourierTransform(nn.Module):
         result = x
         for step in range(self.n_steps):
             # 在序列维度 dim=1 上做 FFT
+            # norm='ortho' 保证酉性：F†F = I，即 QFT 操作是等距变换
             x_qft = torch.fft.fft(result, dim=1, norm='ortho')
 
-            # 归一化（norm='ortho' 已处理，但显式确保）
-            x_qft = x_qft / (math.sqrt(N) ** (0 if True else 1))  # ortho 已归一化
-
             # 混合原始态和 QFT 态（部分纠缠）
+            # α→1：保持原始局部表示；α→0：完全转换为全局频域表示
             result = alpha * result + (1 - alpha) * x_qft
 
         return result
@@ -612,6 +611,22 @@ class QuantumEntanglementLayer(nn.Module):
             f'global_qft={self.use_global_qft}, '
             f'coupling={self.coupling.coupling_type}'
         )
+
+    @property
+    def entanglement_depth(self) -> int:
+        """返回纠缠深度（QFT 步数 + 局部纠缠层数）。
+
+        纠缠深度是衡量模型在序列方向建立长程关联能力的指标：
+        - 局部纠缠始终贡献 1 层
+        - 每步 QFT 额外贡献 1 层（指数级扩大感受野）
+
+        Returns:
+            等效纠缠深度（整数）
+        """
+        depth = 1  # 局部纠缠
+        if self.use_global_qft:
+            depth += self.qft.n_steps
+        return depth
 
 
 # ──────────────────────────────────────────────
