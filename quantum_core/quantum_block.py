@@ -141,6 +141,35 @@ class QuantumBlock(nn.Module):
                 tau_high=kwargs.get('qci_tau_high', current_tau_high),
             )
 
+    def get_complexity_report(self, seq_len: int = 512) -> Dict[str, str]:
+        """返回各子模块的计算复杂度报告。
+
+        基于给定序列长度 N 和模型维度 d 估计操作数，
+        帮助定位瓶颈并指导优化方向。
+
+        Args:
+            seq_len: 假定的序列长度 N（用于估算注意力复杂度）
+        Returns:
+            dict: 子模块名 → 渐进复杂度描述
+        """
+        N, D, H = seq_len, self.dim, self.qsa.num_heads
+        k = max(1, int(self.qsa.topk_ratio * N))
+        ffn_d = self.ffn_q.ffn_dim
+
+        return {
+            'QSA（复数投影 Q/K/V）': f'O(N·D²) ≈ {N * D * D // 1000}K ops',
+            'QSA（内积矩阵）': (
+                f'O(N·k·D) ≈ {N * k * D // 1000}K ops  [topk={k}/{N}]'
+                if self.qsa.mode == 'topk'
+                else f'O(N²·D) ≈ {N * N * D // 1000}K ops  [full]'
+            ),
+            'QEL（局部纠缠）': f'O(N·D²) ≈ {N * D * D // 1000}K ops',
+            'QEL（QFT）': f'O(N·D·log N) ≈ {int(N * D * (N.bit_length())) // 1000}K ops',
+            'FFN_Q': f'O(N·D·ffn_d) ≈ {N * D * ffn_d // 1000}K ops  [ffn_dim={ffn_d}]',
+            'QCI（POVM）': f'O(N·D·collapse_dim)' if self.collapse_enabled else 'disabled',
+            '总计（估算）': f'≈ {(N*D*D*4 + N*k*D + N*D*ffn_d) // 1_000_000}M ops / block',
+        }
+
     def extra_repr(self) -> str:
         return (
             f'dim={self.dim}, collapse={self.collapse_enabled}, '
