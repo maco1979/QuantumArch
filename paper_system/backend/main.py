@@ -34,11 +34,7 @@ DATA_DIR = Path("e:/量子架构/paper_system/data")
 PAPERS_DIR = DATA_DIR / "papers"
 PAPERS_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(
-    title="论文学习系统 API",
-    description="arXiv 论文抓取和学习系统",
-    version="1.0.0"
-)
+app = FastAPI(title="论文学习系统 API", description="arXiv 论文抓取和学习系统", version="1.0.0")
 
 # CORS
 app.add_middleware(
@@ -50,19 +46,17 @@ app.add_middleware(
 )
 
 # 初始化抓取器
-crawler = ArxivCrawler(
-    data_dir=str(DATA_DIR),
-    categories=[],
-    max_results_per_category=1000
-)
+crawler = ArxivCrawler(data_dir=str(DATA_DIR), categories=[], max_results_per_category=1000)
 
 
 # ============================================================================
 # 数据模型
 # ============================================================================
 
+
 class PaperOut(BaseModel):
     """论文输出模型"""
+
     arxiv_id: str
     title: str
     authors: List[str]
@@ -81,6 +75,7 @@ class PaperOut(BaseModel):
 
 class SearchRequest(BaseModel):
     """搜索请求"""
+
     query: str = ""
     categories: List[str] = []
     max_results: int = 20
@@ -89,6 +84,7 @@ class SearchRequest(BaseModel):
 
 class CrawlRequest(BaseModel):
     """抓取请求"""
+
     categories: List[str] = []
     max_per_category: int = 100
     download_pdfs: bool = False
@@ -96,6 +92,7 @@ class CrawlRequest(BaseModel):
 
 class PaperUpdate(BaseModel):
     """论文更新"""
+
     read_status: Optional[str] = None
     tags: Optional[List[str]] = None
     notes: Optional[str] = None
@@ -104,6 +101,7 @@ class PaperUpdate(BaseModel):
 # ============================================================================
 # 论文管理 API
 # ============================================================================
+
 
 @app.get("/")
 async def root():
@@ -127,26 +125,25 @@ async def get_papers(
 ):
     """获取论文列表"""
     papers = list(crawler.papers.values())
-    
+
     # 过滤
     if category:
         papers = [p for p in papers if category in p.categories]
-    
+
     if read_status:
-        papers = [p for p in papers if getattr(p, 'read_status', 'unread') == read_status]
-    
+        papers = [p for p in papers if getattr(p, "read_status", "unread") == read_status]
+
     if search:
         search = search.lower()
-        papers = [p for p in papers 
-                  if search in p.title.lower() or search in p.abstract.lower()]
-    
+        papers = [p for p in papers if search in p.title.lower() or search in p.abstract.lower()]
+
     # 排序
     papers.sort(key=lambda x: x.published_date, reverse=True)
-    
+
     # 分页
     start = (page - 1) * page_size
     end = start + page_size
-    
+
     return papers[start:end]
 
 
@@ -165,22 +162,23 @@ async def update_paper(arxiv_id: str, update: PaperUpdate):
     paper = crawler.papers.get(arxiv_id)
     if not paper:
         raise HTTPException(status_code=404, detail="论文不存在")
-    
+
     if update.read_status is not None:
         paper.read_status = update.read_status
     if update.tags is not None:
         paper.tags = update.tags
     if update.notes is not None:
         paper.notes = update.notes
-    
+
     crawler._save_index()
-    
+
     return {"status": "ok", "paper": paper}
 
 
 # ============================================================================
 # 搜索 API
 # ============================================================================
+
 
 @app.post("/api/search")
 async def search_papers(req: SearchRequest):
@@ -190,16 +188,14 @@ async def search_papers(req: SearchRequest):
         categories=req.categories,
         max_results=req.max_results,
     )
-    
-    return {
-        "total": len(papers),
-        "papers": papers
-    }
+
+    return {"total": len(papers), "papers": papers}
 
 
 # ============================================================================
 # 抓取 API
 # ============================================================================
+
 
 @app.post("/api/crawl")
 async def start_crawl(
@@ -207,10 +203,11 @@ async def start_crawl(
     background_tasks: BackgroundTasks,
 ):
     """开始抓取论文"""
+
     def crawl_task(categories: List[str], max_count: int, download: bool):
         if not categories:
             categories = list(ARXIV_CATEGORIES.keys())[:3]  # 默认抓取前3个领域
-        
+
         for cat in categories:
             try:
                 if cat in ARXIV_CATEGORIES:
@@ -221,12 +218,12 @@ async def start_crawl(
                     crawler.crawl_category(cat, max_count)
             except Exception as e:
                 print(f"抓取失败: {cat} - {e}")
-        
+
         if download:
             crawler.batch_download(50)
-    
+
     background_tasks.add_task(crawl_task, req.categories, req.max_per_category, req.download_pdfs)
-    
+
     return {"status": "started", "message": "抓取任务已启动"}
 
 
@@ -247,19 +244,21 @@ async def get_categories():
 # 统计 API
 # ============================================================================
 
+
 @app.get("/api/statistics")
 async def get_statistics():
     """获取系统统计"""
     stats = crawler.get_statistics()
-    
+
     # 添加阅读统计
     total = len(crawler.papers)
-    read = sum(1 for p in crawler.papers.values() 
-               if getattr(p, 'read_status', 'unread') != 'unread')
-    
-    stats['read_count'] = read
-    stats['unread_count'] = total - read
-    
+    read = sum(
+        1 for p in crawler.papers.values() if getattr(p, "read_status", "unread") != "unread"
+    )
+
+    stats["read_count"] = read
+    stats["unread_count"] = total - read
+
     return stats
 
 
@@ -267,50 +266,48 @@ async def get_statistics():
 # 知识图谱 API
 # ============================================================================
 
+
 @app.get("/api/knowledge-graph")
 async def get_knowledge_graph():
     """获取知识图谱数据"""
     # 构建简单的作者-论文关系图
     authors = {}
     links = []
-    
+
     for paper in list(crawler.papers.values())[:500]:  # 限制数量
         for author in paper.authors[:5]:  # 每篇论文最多5个作者
             if author not in authors:
                 authors[author] = {
-                    'id': author,
-                    'name': author,
-                    'paper_count': 0,
-                    'categories': set()
+                    "id": author,
+                    "name": author,
+                    "paper_count": 0,
+                    "categories": set(),
                 }
-            authors[author]['paper_count'] += 1
-            authors[author]['categories'].update(paper.categories)
-    
+            authors[author]["paper_count"] += 1
+            authors[author]["categories"].update(paper.categories)
+
     # 转换为列表
     nodes = [
         {
-            'id': name,
-            'name': data['name'],
-            'paper_count': data['paper_count'],
-            'categories': list(data['categories'])[:3]
+            "id": name,
+            "name": data["name"],
+            "paper_count": data["paper_count"],
+            "categories": list(data["categories"])[:3],
         }
         for name, data in authors.items()
     ]
-    
+
     # 按论文数量排序，取前100
-    nodes.sort(key=lambda x: x['paper_count'], reverse=True)
+    nodes.sort(key=lambda x: x["paper_count"], reverse=True)
     nodes = nodes[:100]
-    
-    return {
-        'nodes': nodes,
-        'links': links,
-        'total_authors': len(authors)
-    }
+
+    return {"nodes": nodes, "links": links, "total_authors": len(authors)}
 
 
 # ============================================================================
 # PDF 下载 API
 # ============================================================================
+
 
 @app.post("/api/download/{arxiv_id}")
 async def download_paper(arxiv_id: str, background_tasks: BackgroundTasks):
@@ -318,12 +315,12 @@ async def download_paper(arxiv_id: str, background_tasks: BackgroundTasks):
     paper = crawler.papers.get(arxiv_id)
     if not paper:
         raise HTTPException(status_code=404, detail="论文不存在")
-    
+
     def download_task():
         crawler.download_pdf(paper)
-    
+
     background_tasks.add_task(download_task)
-    
+
     return {"status": "started", "arxiv_id": arxiv_id}
 
 
@@ -333,10 +330,10 @@ async def get_pdf(arxiv_id: str):
     paper = crawler.papers.get(arxiv_id)
     if not paper:
         raise HTTPException(status_code=404, detail="论文不存在")
-    
+
     if paper.local_pdf_path and os.path.exists(paper.local_pdf_path):
         return {"path": paper.local_pdf_path, "url": f"/api/pdf/file/{arxiv_id}"}
-    
+
     return {"path": None, "url": paper.pdf_url}
 
 
@@ -346,11 +343,11 @@ async def serve_pdf(arxiv_id: str):
     paper = crawler.papers.get(arxiv_id)
     if not paper or not paper.local_pdf_path:
         raise HTTPException(status_code=404, detail="PDF 不存在")
-    
+
     return FileResponse(
         paper.local_pdf_path,
-        media_type='application/pdf',
-        headers={"Content-Disposition": f"inline; filename={arxiv_id}.pdf"}
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename={arxiv_id}.pdf"},
     )
 
 
@@ -360,4 +357,5 @@ async def serve_pdf(arxiv_id: str):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -4,4 +4,4 @@
 
 from .performance_benchmark import BenchmarkRunner, BenchmarkResult
 
-__all__ = ['BenchmarkRunner', 'BenchmarkResult']
+__all__ = ["BenchmarkRunner", "BenchmarkResult"]

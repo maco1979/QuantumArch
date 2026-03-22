@@ -3,7 +3,7 @@ QuantumArch 真实实验基准 - 对比标准 Transformer
 
 实验设计：
 1. 复制记忆任务 (Copy Memory) - 测试序列建模能力
-2. 加法任务 (Addition) - 测试数值推理能力  
+2. 加法任务 (Addition) - 测试数值推理能力
 3. 排序任务 (Sorting) - 测试序列理解能力
 
 每个实验对比：
@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # 标准 Transformer 基准模型
 # ============================================================================
 
+
 class StandardTransformer(nn.Module):
     """标准 Transformer 编码器（与 QuantumArch 同参数量对比）"""
 
@@ -68,7 +69,7 @@ class StandardTransformer(nn.Module):
             nhead=num_heads,
             dim_feedforward=ffn_dim,
             dropout=dropout,
-            activation='gelu',
+            activation="gelu",
             batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
@@ -89,6 +90,7 @@ class StandardTransformer(nn.Module):
 # ============================================================================
 # 数据生成器
 # ============================================================================
+
 
 class CopyMemoryTask:
     """复制记忆任务：记忆序列中的标记并在指定位置回忆。
@@ -118,12 +120,16 @@ class CopyMemoryTask:
 
         for _ in range(batch_size):
             # 随机选择 num_items 个数据 token
-            items = torch.randint(self.data_start, self.data_start + self.vocab_size, (self.num_items,))
+            items = torch.randint(
+                self.data_start, self.data_start + self.vocab_size, (self.num_items,)
+            )
             items_per_sample.append(items)
 
             # 构建序列: [BOS, item_1..item_k, DELIM, PAD...PAD, item_1..item_k, EOS]
             recall_start = self.num_items + 2  # BOS + items + DELIM
-            padding_len = max(0, self.total_len - 2 - self.num_items * 2 - 1)  # -2 for BOS/EOS, -1 for DELIM
+            padding_len = max(
+                0, self.total_len - 2 - self.num_items * 2 - 1
+            )  # -2 for BOS/EOS, -1 for DELIM
             seq = [self.bos]
             seq.extend(items.tolist())
             seq.append(self.delim)
@@ -141,20 +147,23 @@ class CopyMemoryTask:
         # Pad to same length
         max_len = max(len(s) for s in sequences)
         padded_seqs = torch.full((batch_size, max_len), self.pad, dtype=torch.long, device=device)
-        padded_targets = torch.full((batch_size, max_len), self.pad, dtype=torch.long, device=device)
+        padded_targets = torch.full(
+            (batch_size, max_len), self.pad, dtype=torch.long, device=device
+        )
 
         for i, (seq, tgt) in enumerate(zip(sequences, targets)):
-            padded_seqs[i, :len(seq)] = torch.tensor(seq, dtype=torch.long, device=device)
-            padded_targets[i, :len(tgt)] = torch.tensor(tgt, dtype=torch.long, device=device)
+            padded_seqs[i, : len(seq)] = torch.tensor(seq, dtype=torch.long, device=device)
+            padded_targets[i, : len(tgt)] = torch.tensor(tgt, dtype=torch.long, device=device)
 
         return {
-            'input_ids': padded_seqs,
-            'labels': padded_targets,
-            'num_items': self.num_items,
+            "input_ids": padded_seqs,
+            "labels": padded_targets,
+            "num_items": self.num_items,
         }
 
-    def evaluate_accuracy(self, logits: torch.Tensor, labels: torch.Tensor,
-                          num_items: int) -> Tuple[float, float]:
+    def evaluate_accuracy(
+        self, logits: torch.Tensor, labels: torch.Tensor, num_items: int
+    ) -> Tuple[float, float]:
         """计算 recall 区域的准确率（核心指标）和整体准确率。"""
         predictions = logits.argmax(dim=-1)
 
@@ -167,7 +176,9 @@ class CopyMemoryTask:
         # Recall 区域准确率
         B, N = labels.shape
         recall_start = num_items + 2  # BOS + items + DELIM
-        recall_positions = torch.arange(recall_start, recall_start + num_items, device=labels.device)
+        recall_positions = torch.arange(
+            recall_start, recall_start + num_items, device=labels.device
+        )
         recall_positions = recall_positions[recall_positions < N]  # 防止越界
         if len(recall_positions) == 0:
             return overall_acc, 0.0
@@ -221,7 +232,15 @@ class AdditionTask:
             digits_r = self._num_to_digits(result)
 
             # 构建序列
-            seq = [self.bos] + digits_a + [self.plus] + digits_b + [self.delim] + digits_r + [self.eos]
+            seq = (
+                [self.bos]
+                + digits_a
+                + [self.plus]
+                + digits_b
+                + [self.delim]
+                + digits_r
+                + [self.eos]
+            )
             target = seq[1:] + [self.eos]
 
             # Pad
@@ -229,20 +248,21 @@ class AdditionTask:
                 seq.append(self.pad)
                 target.append(self.pad)
 
-            sequences.append(seq[:self.total_len])
-            targets.append(target[:self.total_len])
+            sequences.append(seq[: self.total_len])
+            targets.append(target[: self.total_len])
 
         input_ids = torch.tensor(sequences, dtype=torch.long, device=device)
         labels = torch.tensor(targets, dtype=torch.long, device=device)
 
         return {
-            'input_ids': input_ids,
-            'labels': labels,
-            'results': None,  # 结果编码在序列中
+            "input_ids": input_ids,
+            "labels": labels,
+            "results": None,  # 结果编码在序列中
         }
 
-    def evaluate_accuracy(self, logits: torch.Tensor, labels: torch.Tensor,
-                          **kwargs) -> Tuple[float, float]:
+    def evaluate_accuracy(
+        self, logits: torch.Tensor, labels: torch.Tensor, **kwargs
+    ) -> Tuple[float, float]:
         predictions = logits.argmax(dim=-1)
         mask = labels != self.pad
         if mask.sum() == 0:
@@ -274,30 +294,35 @@ class SymbolSortingTask:
         targets = []
 
         for _ in range(batch_size):
-            symbols = torch.randint(self.sym_start, self.sym_start + self.symbol_range, (self.num_symbols,))
+            symbols = torch.randint(
+                self.sym_start, self.sym_start + self.symbol_range, (self.num_symbols,)
+            )
             sorted_symbols = symbols.sort()[0]
 
-            seq = [self.bos] + symbols.tolist() + [self.delim] + sorted_symbols.tolist() + [self.eos]
+            seq = (
+                [self.bos] + symbols.tolist() + [self.delim] + sorted_symbols.tolist() + [self.eos]
+            )
             target = seq[1:] + [self.eos]
 
             while len(seq) < self.total_len:
                 seq.append(self.pad)
                 target.append(self.pad)
 
-            sequences.append(seq[:self.total_len])
-            targets.append(target[:self.total_len])
+            sequences.append(seq[: self.total_len])
+            targets.append(target[: self.total_len])
 
         input_ids = torch.tensor(sequences, dtype=torch.long, device=device)
         labels = torch.tensor(targets, dtype=torch.long, device=device)
 
         return {
-            'input_ids': input_ids,
-            'labels': labels,
-            'num_symbols': self.num_symbols,
+            "input_ids": input_ids,
+            "labels": labels,
+            "num_symbols": self.num_symbols,
         }
 
-    def evaluate_accuracy(self, logits: torch.Tensor, labels: torch.Tensor,
-                          num_symbols: int = 0, **kwargs) -> Tuple[float, float]:
+    def evaluate_accuracy(
+        self, logits: torch.Tensor, labels: torch.Tensor, num_symbols: int = 0, **kwargs
+    ) -> Tuple[float, float]:
         predictions = logits.argmax(dim=-1)
         mask = labels != self.pad
         if mask.sum() == 0:
@@ -322,9 +347,11 @@ class SymbolSortingTask:
 # 实验运行器
 # ============================================================================
 
+
 @dataclass
 class ExperimentConfig:
     """实验配置"""
+
     name: str
     task: str  # 'copy', 'addition', 'sorting'
     dim: int = 128
@@ -342,6 +369,7 @@ class ExperimentConfig:
 @dataclass
 class ExperimentResult:
     """实验结果"""
+
     model_name: str
     task_name: str
     total_params: int
@@ -372,7 +400,7 @@ def run_single_experiment(
     np.random.seed(config.seed)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=0.01)
-    num_classes = task.total_tokens if hasattr(task, 'total_tokens') else config.max_seq_len
+    num_classes = task.total_tokens if hasattr(task, "total_tokens") else config.max_seq_len
 
     model.to(device)
     model.train()
@@ -392,15 +420,15 @@ def run_single_experiment(
         for _ in range(30):  # 30 batches per epoch
             batch = task.generate_batch(config.batch_size, device)
 
-            if model_name == 'QuantumArch':
+            if model_name == "QuantumArch":
                 # QuantumArch 使用字典输入
-                out = model({'token_ids': batch['input_ids']}, training=True)
-                logits = out['output']
+                out = model({"token_ids": batch["input_ids"]}, training=True)
+                logits = out["output"]
             else:
-                logits = model(batch['input_ids'])
+                logits = model(batch["input_ids"])
 
             # 计算损失（排除 PAD 位置）
-            labels = batch['labels']
+            labels = batch["labels"]
             loss_mask = labels != task.pad
             if loss_mask.sum() == 0:
                 continue
@@ -426,18 +454,18 @@ def run_single_experiment(
                 model.eval()
                 with torch.no_grad():
                     eval_batch = task.generate_batch(config.batch_size, device)
-                    if model_name == 'QuantumArch':
-                        eval_out = model({'token_ids': eval_batch['input_ids']}, training=False)
-                        eval_logits = eval_out['output']
+                    if model_name == "QuantumArch":
+                        eval_out = model({"token_ids": eval_batch["input_ids"]}, training=False)
+                        eval_logits = eval_out["output"]
                     else:
-                        eval_logits = model(eval_batch['input_ids'])
+                        eval_logits = model(eval_batch["input_ids"])
 
-                    eval_labels = eval_batch['labels']
+                    eval_labels = eval_batch["labels"]
                     eval_kwargs = {}
-                    if 'num_items' in eval_batch:
-                        eval_kwargs['num_items'] = eval_batch['num_items']
-                    if 'num_symbols' in eval_batch:
-                        eval_kwargs['num_symbols'] = eval_batch['num_symbols']
+                    if "num_items" in eval_batch:
+                        eval_kwargs["num_items"] = eval_batch["num_items"]
+                    if "num_symbols" in eval_batch:
+                        eval_kwargs["num_symbols"] = eval_batch["num_symbols"]
 
                     overall_acc, task_acc = task.evaluate_accuracy(
                         eval_logits, eval_labels, **eval_kwargs
@@ -450,26 +478,30 @@ def run_single_experiment(
         avg_overall_acc = sum(epoch_overall_accs) / max(len(epoch_overall_accs), 1)
         avg_task_acc = sum(epoch_task_accs) / max(len(epoch_task_accs), 1)
 
-        history.append({
-            'epoch': epoch + 1,
-            'train_loss': avg_loss,
-            'eval_overall_acc': avg_overall_acc,
-            'eval_task_acc': avg_task_acc,
-        })
+        history.append(
+            {
+                "epoch": epoch + 1,
+                "train_loss": avg_loss,
+                "eval_overall_acc": avg_overall_acc,
+                "eval_task_acc": avg_task_acc,
+            }
+        )
 
         # 检查收敛
         if convergence_epoch < 0 and avg_task_acc >= 0.90:
             convergence_epoch = epoch + 1
 
         if (epoch + 1) % config.eval_interval == 0 or epoch == 0 or epoch == config.num_epochs - 1:
-            print(f"    Epoch {epoch+1:3d}/{config.num_epochs}: "
-                  f"loss={avg_loss:.4f}, overall_acc={avg_overall_acc:.4f}, "
-                  f"task_acc={avg_task_acc:.4f}")
+            print(
+                f"    Epoch {epoch+1:3d}/{config.num_epochs}: "
+                f"loss={avg_loss:.4f}, overall_acc={avg_overall_acc:.4f}, "
+                f"task_acc={avg_task_acc:.4f}"
+            )
 
     elapsed = time.time() - start_time
-    final_loss = history[-1]['train_loss'] if history else float('inf')
-    final_overall = history[-1]['eval_overall_acc'] if history else 0.0
-    final_task = history[-1]['eval_task_acc'] if history else 0.0
+    final_loss = history[-1]["train_loss"] if history else float("inf")
+    final_overall = history[-1]["eval_overall_acc"] if history else 0.0
+    final_task = history[-1]["eval_task_acc"] if history else 0.0
 
     return ExperimentResult(
         model_name=model_name,
@@ -491,27 +523,56 @@ def run_all_experiments(device: torch.device) -> List[ExperimentResult]:
 
     # ── 实验配置 ──
     experiments = [
-        ExperimentConfig(name='copy_memory', task='copy', dim=64, num_layers=2, num_heads=4,
-                         batch_size=16, num_epochs=20, learning_rate=5e-4, max_seq_len=32),
-        ExperimentConfig(name='addition', task='addition', dim=64, num_layers=2, num_heads=4,
-                         batch_size=16, num_epochs=20, learning_rate=5e-4, max_seq_len=32),
-        ExperimentConfig(name='sorting', task='sorting', dim=64, num_layers=2, num_heads=4,
-                         batch_size=16, num_epochs=20, learning_rate=5e-4, max_seq_len=32),
+        ExperimentConfig(
+            name="copy_memory",
+            task="copy",
+            dim=64,
+            num_layers=2,
+            num_heads=4,
+            batch_size=16,
+            num_epochs=20,
+            learning_rate=5e-4,
+            max_seq_len=32,
+        ),
+        ExperimentConfig(
+            name="addition",
+            task="addition",
+            dim=64,
+            num_layers=2,
+            num_heads=4,
+            batch_size=16,
+            num_epochs=20,
+            learning_rate=5e-4,
+            max_seq_len=32,
+        ),
+        ExperimentConfig(
+            name="sorting",
+            task="sorting",
+            dim=64,
+            num_layers=2,
+            num_heads=4,
+            batch_size=16,
+            num_epochs=20,
+            learning_rate=5e-4,
+            max_seq_len=32,
+        ),
     ]
 
     for config in experiments:
         print(f"\n{'='*70}")
         print(f"  Task: {config.name}")
-        print(f"  Config: dim={config.dim}, layers={config.num_layers}, "
-              f"heads={config.num_heads}, epochs={config.num_epochs}")
+        print(
+            f"  Config: dim={config.dim}, layers={config.num_layers}, "
+            f"heads={config.num_heads}, epochs={config.num_epochs}"
+        )
         print(f"{'='*70}")
 
         # 创建任务
-        if config.task == 'copy':
+        if config.task == "copy":
             task = CopyMemoryTask(vocab_size=8, num_items=6, total_len=24)
-        elif config.task == 'addition':
+        elif config.task == "addition":
             task = AdditionTask(max_num=500, total_len=20)
-        elif config.task == 'sorting':
+        elif config.task == "sorting":
             task = SymbolSortingTask(num_symbols=6, symbol_range=16, total_len=22)
         else:
             raise ValueError(f"Unknown task: {config.task}")
@@ -534,12 +595,12 @@ def run_all_experiments(device: torch.device) -> List[ExperimentResult]:
             tau_low=0.5,
             tau_high=1.5,
             dropout=0.1,
-            qsa_mode='topk',
+            qsa_mode="topk",
             output_dim=total_tokens,
         )
 
         qa_result = run_single_experiment(
-            qa_model, 'QuantumArch', task, config.name, config, device
+            qa_model, "QuantumArch", task, config.name, config, device
         )
         results.append(qa_result)
 
@@ -556,7 +617,7 @@ def run_all_experiments(device: torch.device) -> List[ExperimentResult]:
         )
 
         st_result = run_single_experiment(
-            st_model, 'StandardTransformer', task, config.name, config, device
+            st_model, "StandardTransformer", task, config.name, config, device
         )
         results.append(st_result)
 
@@ -579,19 +640,21 @@ def generate_report(results: List[ExperimentResult]) -> str:
         tasks[r.task_name][r.model_name] = r
 
     report_lines.append("\n" + "-" * 70)
-    report_lines.append(f"  {'任务':<20} {'模型':<22} {'参数量':<12} {'最终损失':<12} "
-                         f"{'Task Acc':<12} {'收敛Epoch':<12} {'时间(s)':<10}")
+    report_lines.append(
+        f"  {'任务':<20} {'模型':<22} {'参数量':<12} {'最终损失':<12} "
+        f"{'Task Acc':<12} {'收敛Epoch':<12} {'时间(s)':<10}"
+    )
     report_lines.append("-" * 70)
 
     summary_data = []
 
-    for task_name in ['copy_memory', 'addition', 'sorting']:
+    for task_name in ["copy_memory", "addition", "sorting"]:
         if task_name not in tasks:
             continue
         models = tasks[task_name]
 
-        qa = models.get('QuantumArch')
-        st = models.get('StandardTransformer')
+        qa = models.get("QuantumArch")
+        st = models.get("StandardTransformer")
 
         if qa:
             report_lines.append(
@@ -600,9 +663,7 @@ def generate_report(results: List[ExperimentResult]) -> str:
                 f"{qa.convergence_epoch if qa.convergence_epoch > 0 else 'N/A':<12} "
                 f"{qa.time_seconds:<10.1f}"
             )
-            summary_data.append({
-                'task': task_name, 'model': 'QuantumArch', 'result': qa
-            })
+            summary_data.append({"task": task_name, "model": "QuantumArch", "result": qa})
 
         if st:
             report_lines.append(
@@ -611,9 +672,7 @@ def generate_report(results: List[ExperimentResult]) -> str:
                 f"{st.convergence_epoch if st.convergence_epoch > 0 else 'N/A':<12} "
                 f"{st.time_seconds:<10.1f}"
             )
-            summary_data.append({
-                'task': task_name, 'model': 'StandardTransformer', 'result': st
-            })
+            summary_data.append({"task": task_name, "model": "StandardTransformer", "result": st})
 
         # 对比
         if qa and st:
@@ -637,8 +696,8 @@ def generate_report(results: List[ExperimentResult]) -> str:
     ties = 0
     for task_name in tasks:
         models = tasks[task_name]
-        qa = models.get('QuantumArch')
-        st = models.get('StandardTransformer')
+        qa = models.get("QuantumArch")
+        st = models.get("StandardTransformer")
         if qa and st:
             diff = qa.final_task_acc - st.final_task_acc
             if diff > 0.01:
@@ -653,8 +712,8 @@ def generate_report(results: List[ExperimentResult]) -> str:
     report_lines.append(f"  持平: {ties} 个任务")
 
     # 平均指标
-    qa_accs = [r.final_task_acc for r in results if r.model_name == 'QuantumArch']
-    st_accs = [r.final_task_acc for r in results if r.model_name == 'StandardTransformer']
+    qa_accs = [r.final_task_acc for r in results if r.model_name == "QuantumArch"]
+    st_accs = [r.final_task_acc for r in results if r.model_name == "StandardTransformer"]
     if qa_accs:
         report_lines.append(f"\n  QuantumArch 平均 Task Accuracy: {np.mean(qa_accs):.4f}")
     if st_accs:
@@ -672,10 +731,10 @@ def generate_report(results: List[ExperimentResult]) -> str:
 def save_results_json(results: List[ExperimentResult], output_path: str):
     """保存结果为 JSON。"""
     data = {
-        'timestamp': datetime.now().isoformat(),
-        'results': [asdict(r) for r in results],
+        "timestamp": datetime.now().isoformat(),
+        "results": [asdict(r) for r in results],
     }
-    with open(output_path, 'w', encoding='utf-8') as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False, default=str)
 
 
@@ -699,14 +758,14 @@ def main():
     print("\n" + report)
 
     # 保存结果
-    output_dir = Path(__file__).parent.parent / 'experiments'
+    output_dir = Path(__file__).parent.parent / "experiments"
     output_dir.mkdir(exist_ok=True)
 
-    report_path = output_dir / 'experiment_results.txt'
-    with open(report_path, 'w', encoding='utf-8') as f:
+    report_path = output_dir / "experiment_results.txt"
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write(report)
 
-    json_path = output_dir / 'experiment_results.json'
+    json_path = output_dir / "experiment_results.json"
     save_results_json(results, str(json_path))
 
     print(f"\n  报告已保存: {report_path}")

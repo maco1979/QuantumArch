@@ -17,6 +17,7 @@ import math
 @dataclass
 class BenchmarkResult:
     """基准测试结果"""
+
     test_name: str
     quantum_time_ms: float
     baseline_time_ms: float
@@ -31,6 +32,7 @@ class BenchmarkResult:
 # 标准 Transformer 组件（Baseline）
 # ============================================================================
 
+
 class StandardAttention(nn.Module):
     """标准多头注意力 (O(n²))"""
 
@@ -38,7 +40,7 @@ class StandardAttention(nn.Module):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
-        self.scale = head_dim ** -0.5
+        self.scale = head_dim**-0.5
 
         self.qkv = nn.Linear(dim, dim * 3)
         self.proj = nn.Linear(dim, dim)
@@ -51,7 +53,7 @@ class StandardAttention(nn.Module):
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
         if mask is not None:
-            attn = attn.masked_fill(mask == 0, float('-inf'))
+            attn = attn.masked_fill(mask == 0, float("-inf"))
         attn = attn.softmax(dim=-1)
 
         out = (attn @ v).transpose(1, 2).reshape(B, N, C)
@@ -99,9 +101,14 @@ class StandardBlock(nn.Module):
 
 try:
     from quantum_core import (
-        QuantumSuperpositionAttention, QuantumEntanglementLayer,
-        QuantumCollapseInference, QuantumFFN, QuantumBlock, check_unitarity
+        QuantumSuperpositionAttention,
+        QuantumEntanglementLayer,
+        QuantumCollapseInference,
+        QuantumFFN,
+        QuantumBlock,
+        check_unitarity,
     )
+
     QUANTUM_CORE_AVAILABLE = True
 except ImportError:
     QUANTUM_CORE_AVAILABLE = False
@@ -112,15 +119,17 @@ except ImportError:
 # 基准测试工具
 # ============================================================================
 
+
 class BenchmarkRunner:
     """基准测试运行器"""
 
-    def __init__(self, device: str = 'cuda' if torch.cuda.is_available() else 'cpu'):
+    def __init__(self, device: str = "cuda" if torch.cuda.is_available() else "cpu"):
         self.device = device
         self.results: List[BenchmarkResult] = []
 
-    def measure_time(self, model: nn.Module, x: torch.Tensor,
-                     warmup: int = 10, repeats: int = 100) -> Tuple[float, float]:
+    def measure_time(
+        self, model: nn.Module, x: torch.Tensor, warmup: int = 10, repeats: int = 100
+    ) -> Tuple[float, float]:
         """测量模型前向传播时间"""
         model = model.to(self.device)
         x = x.to(self.device)
@@ -130,7 +139,7 @@ class BenchmarkRunner:
             with torch.no_grad():
                 _ = model(x)
 
-        if self.device == 'cuda':
+        if self.device == "cuda":
             torch.cuda.synchronize()
 
         # 计时
@@ -138,17 +147,17 @@ class BenchmarkRunner:
         for _ in range(repeats):
             with torch.no_grad():
                 _ = model(x)
-        if self.device == 'cuda':
+        if self.device == "cuda":
             torch.cuda.synchronize()
 
         elapsed = (time.time() - start) / repeats
 
         # 测量内存
-        if self.device == 'cuda':
+        if self.device == "cuda":
             torch.cuda.reset_peak_memory_stats()
             with torch.no_grad():
                 _ = model(x)
-            if self.device == 'cuda':
+            if self.device == "cuda":
                 torch.cuda.synchronize()
             memory_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
         else:
@@ -175,10 +184,7 @@ class BenchmarkRunner:
                 # QSA
                 if QUANTUM_CORE_AVAILABLE:
                     qsa = QuantumSuperpositionAttention(
-                        dim=dim,
-                        num_heads=num_heads,
-                        topk_ratio=topk_ratio,
-                        mode='topk'
+                        dim=dim, num_heads=num_heads, topk_ratio=topk_ratio, mode="topk"
                     )
                     x_complex = torch.randn(2, seq_len, dim, dtype=torch.cfloat)
                     quantum_time, quantum_mem = self.measure_time(qsa, x_complex)
@@ -195,11 +201,11 @@ class BenchmarkRunner:
                         baseline_memory_mb=baseline_mem,
                         memory_ratio=memory_ratio,
                         metrics={
-                            'dim': dim,
-                            'seq_len': seq_len,
-                            'num_heads': num_heads,
-                            'topk_ratio': topk_ratio
-                        }
+                            "dim": dim,
+                            "seq_len": seq_len,
+                            "num_heads": num_heads,
+                            "topk_ratio": topk_ratio,
+                        },
                     )
                     self.results.append(result)
 
@@ -239,10 +245,7 @@ class BenchmarkRunner:
                         quantum_memory_mb=quantum_mem,
                         baseline_memory_mb=0.0,
                         memory_ratio=0.0,
-                        metrics={
-                            'dim': dim,
-                            'seq_len': seq_len
-                        }
+                        metrics={"dim": dim, "seq_len": seq_len},
                     )
                     self.results.append(result)
 
@@ -268,7 +271,7 @@ class BenchmarkRunner:
 
             # FFN_Q
             if QUANTUM_CORE_AVAILABLE:
-                ffn_q = QuantumFFN(dim=dim, ffn_dim=ffn_dim, activation='modrelu')
+                ffn_q = QuantumFFN(dim=dim, ffn_dim=ffn_dim, activation="modrelu")
                 x_complex = torch.randn(2, seq_len, dim, dtype=torch.cfloat)
                 quantum_time, quantum_mem = self.measure_time(ffn_q, x_complex)
 
@@ -283,10 +286,7 @@ class BenchmarkRunner:
                     quantum_memory_mb=quantum_mem,
                     baseline_memory_mb=baseline_mem,
                     memory_ratio=memory_ratio,
-                    metrics={
-                        'dim': dim,
-                        'ffn_dim': ffn_dim
-                    }
+                    metrics={"dim": dim, "ffn_dim": ffn_dim},
                 )
                 self.results.append(result)
 
@@ -319,7 +319,7 @@ class BenchmarkRunner:
                 with torch.no_grad():
                     output_aggressive, metrics_aggressive = qci(x)
 
-                early_exit_rate = metrics_aggressive.get('early_exit_rate', 0)
+                early_exit_rate = metrics_aggressive.get("early_exit_rate", 0)
 
                 print(f"  dim={dim}, seq_len={seq_len}:")
                 print(f"    早退率 (threshold=0.3): {early_exit_rate:.2%}")
@@ -328,7 +328,7 @@ class BenchmarkRunner:
                 normal_time, _ = self.measure_time(
                     QuantumCollapseInference(dim=dim),
                     torch.randn(2, seq_len, dim, dtype=torch.cfloat),
-                    repeats=50
+                    repeats=50,
                 )
 
                 result = BenchmarkResult(
@@ -339,11 +339,7 @@ class BenchmarkRunner:
                     quantum_memory_mb=0.0,
                     baseline_memory_mb=0.0,
                     memory_ratio=0.0,
-                    metrics={
-                        'dim': dim,
-                        'seq_len': seq_len,
-                        'early_exit_rate': early_exit_rate
-                    }
+                    metrics={"dim": dim, "seq_len": seq_len, "early_exit_rate": early_exit_rate},
                 )
                 self.results.append(result)
 
@@ -357,10 +353,10 @@ class BenchmarkRunner:
         print("=" * 80)
 
         for cfg in configs:
-            dim = cfg['dim']
-            num_heads = cfg['num_heads']
-            ffn_dim = cfg['ffn_dim']
-            seq_len = cfg['seq_len']
+            dim = cfg["dim"]
+            num_heads = cfg["num_heads"]
+            ffn_dim = cfg["ffn_dim"]
+            seq_len = cfg["seq_len"]
 
             # 标准 Block
             standard_block = StandardBlock(dim, num_heads, ffn_dim)
@@ -373,7 +369,7 @@ class BenchmarkRunner:
                 num_heads=num_heads,
                 ffn_dim=ffn_dim,
                 topk_ratio=0.1,
-                collapse_enabled=False  # 先不测试坍缩
+                collapse_enabled=False,  # 先不测试坍缩
             )
             x_complex = torch.randn(2, seq_len, dim, dtype=torch.cfloat)
             quantum_time, quantum_mem = self.measure_time(quantum_block, x_complex)
@@ -389,7 +385,7 @@ class BenchmarkRunner:
                 quantum_memory_mb=quantum_mem,
                 baseline_memory_mb=baseline_mem,
                 memory_ratio=memory_ratio,
-                metrics=cfg
+                metrics=cfg,
             )
             self.results.append(result)
 
@@ -417,8 +413,8 @@ class BenchmarkRunner:
         self.benchmark_qci_early_exit(dims, seq_lengths)
 
         block_configs = [
-            {'dim': 128, 'num_heads': 4, 'ffn_dim': 512, 'seq_len': 128},
-            {'dim': 256, 'num_heads': 8, 'ffn_dim': 1024, 'seq_len': 256},
+            {"dim": 128, "num_heads": 4, "ffn_dim": 512, "seq_len": 128},
+            {"dim": 256, "num_heads": 8, "ffn_dim": 1024, "seq_len": 256},
         ]
         self.benchmark_block_comparison(block_configs)
 
@@ -432,10 +428,10 @@ class BenchmarkRunner:
         print("=" * 80)
 
         # 分类汇总
-        qsa_results = [r for r in self.results if 'QSA' in r.test_name]
-        qel_results = [r for r in self.results if 'QEL' in r.test_name]
-        ffn_results = [r for r in self.results if 'FFN' in r.test_name]
-        block_results = [r for r in self.results if 'Block' in r.test_name]
+        qsa_results = [r for r in self.results if "QSA" in r.test_name]
+        qel_results = [r for r in self.results if "QEL" in r.test_name]
+        ffn_results = [r for r in self.results if "FFN" in r.test_name]
+        block_results = [r for r in self.results if "Block" in r.test_name]
 
         def summarize(name, results):
             if not results:
@@ -454,33 +450,35 @@ class BenchmarkRunner:
         summarize("完整 Block", block_results)
 
         # 保存 JSON 报告
-        output_dir = Path('./benchmark_results')
+        output_dir = Path("./benchmark_results")
         output_dir.mkdir(exist_ok=True)
 
         report = {
-            'device': self.device,
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'results': [
+            "device": self.device,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "results": [
                 {
-                    'test_name': r.test_name,
-                    'quantum_time_ms': r.quantum_time_ms,
-                    'baseline_time_ms': r.baseline_time_ms,
-                    'speedup': r.speedup,
-                    'quantum_memory_mb': r.quantum_memory_mb,
-                    'baseline_memory_mb': r.baseline_memory_mb,
-                    'memory_ratio': r.memory_ratio,
-                    'metrics': r.metrics
+                    "test_name": r.test_name,
+                    "quantum_time_ms": r.quantum_time_ms,
+                    "baseline_time_ms": r.baseline_time_ms,
+                    "speedup": r.speedup,
+                    "quantum_memory_mb": r.quantum_memory_mb,
+                    "baseline_memory_mb": r.baseline_memory_mb,
+                    "memory_ratio": r.memory_ratio,
+                    "metrics": r.metrics,
                 }
                 for r in self.results
             ],
-            'summary': {
-                'total_tests': len(self.results),
-                'avg_speedup': sum(r.speedup for r in self.results) / len(self.results) if self.results else 0
-            }
+            "summary": {
+                "total_tests": len(self.results),
+                "avg_speedup": (
+                    sum(r.speedup for r in self.results) / len(self.results) if self.results else 0
+                ),
+            },
         }
 
-        report_file = output_dir / f'benchmark_{int(time.time())}.json'
-        with open(report_file, 'w', encoding='utf-8') as f:
+        report_file = output_dir / f"benchmark_{int(time.time())}.json"
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
 
         print(f"\n报告已保存: {report_file}")
@@ -492,5 +490,5 @@ def main():
     runner.run_all_benchmarks()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

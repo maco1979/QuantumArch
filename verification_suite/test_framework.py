@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TestResult:
     """测试结果数据类"""
+
     test_name: str
     passed: bool
     metric_value: float
@@ -75,7 +76,7 @@ class ComplexArithmeticValidator:
             metric_value=ratio,
             expected_value=3.0,
             tolerance=0.0,
-            details=f"实数={real_time*1000:.2f}ms, 复数={complex_time*1000:.2f}ms"
+            details=f"实数={real_time*1000:.2f}ms, 复数={complex_time*1000:.2f}ms",
         )
 
         self.results.append(result)
@@ -83,6 +84,7 @@ class ComplexArithmeticValidator:
 
     def test_modrelu_gradient(self) -> TestResult:
         """测试ModReLU梯度正确性"""
+
         def modrelu(z, bias=0.0):
             """ModReLU激活函数"""
             abs_z = torch.abs(z)
@@ -111,7 +113,7 @@ class ComplexArithmeticValidator:
             metric_value=1.0 if (has_gradient and gradient_finite) else 0.0,
             expected_value=1.0,
             tolerance=0.0,
-            details=f"梯度={z.grad if has_gradient else 'None'}"
+            details=f"梯度={z.grad if has_gradient else 'None'}",
         )
 
         self.results.append(result)
@@ -119,6 +121,7 @@ class ComplexArithmeticValidator:
 
     def test_unitary_constraint(self) -> TestResult:
         """测试酉约束是否保持"""
+
         def cayley_transform(omega):
             """Cayley变换：将厄米矩阵转为酉矩阵"""
             half_i_omega = 0.5j * omega
@@ -146,7 +149,7 @@ class ComplexArithmeticValidator:
             metric_value=violation,
             expected_value=1e-6,
             tolerance=0.0,
-            details=f"||U†U - I|| = {violation:.2e}"
+            details=f"||U†U - I|| = {violation:.2e}",
         )
 
         self.results.append(result)
@@ -154,6 +157,7 @@ class ComplexArithmeticValidator:
 
     def test_gradient_flow_conservation(self) -> TestResult:
         """测试梯度流守恒"""
+
         # 模拟简单的酉变换网络
         class SimpleUnitaryNet(nn.Module):
             def __init__(self):
@@ -197,7 +201,7 @@ class ComplexArithmeticValidator:
                 metric_value=input_grad_norm,
                 expected_value=output_grad_norm,
                 tolerance=0.1 * output_grad_norm,
-                details=f"input={input_grad_norm:.4f}, output={output_grad_norm:.4f}"
+                details=f"input={input_grad_norm:.4f}, output={output_grad_norm:.4f}",
             )
 
             self.results.append(result)
@@ -210,7 +214,7 @@ class ComplexArithmeticValidator:
                 metric_value=0.0,
                 expected_value=1.0,
                 tolerance=0.0,
-                details="输入梯度为None"
+                details="输入梯度为None",
             )
             self.results.append(result)
             return result
@@ -232,13 +236,14 @@ class HardwareUtilizationValidator:
                 metric_value=0.0,
                 expected_value=60.0,
                 tolerance=0.0,
-                details="CUDA不可用"
+                details="CUDA不可用",
             )
             self.results.append(result)
             return result
 
         try:
             import pynvml
+
             pynvml.nvmlInit()
             handle = pynvml.nvmlDeviceGetHandleByIndex(0)
 
@@ -260,7 +265,7 @@ class HardwareUtilizationValidator:
                 metric_value=float(gpu_util),
                 expected_value=60.0,
                 tolerance=0.0,
-                details=f"GPU利用率={gpu_util}%"
+                details=f"GPU利用率={gpu_util}%",
             )
 
             self.results.append(result)
@@ -274,7 +279,7 @@ class HardwareUtilizationValidator:
                 metric_value=0.0,
                 expected_value=60.0,
                 tolerance=0.0,
-                details="pynvml未安装"
+                details="pynvml未安装",
             )
             self.results.append(result)
             return result
@@ -288,7 +293,7 @@ class HardwareUtilizationValidator:
                 metric_value=0.0,
                 expected_value=1.0,
                 tolerance=0.0,
-                details="CUDA不可用"
+                details="CUDA不可用",
             )
             self.results.append(result)
             return result
@@ -321,7 +326,7 @@ class HardwareUtilizationValidator:
             metric_value=efficiency,
             expected_value=0.5,
             tolerance=0.0,
-            details=f"效率={efficiency:.2%}"
+            details=f"效率={efficiency:.2%}",
         )
 
         self.results.append(result)
@@ -355,8 +360,7 @@ class TrainingStabilityValidator:
 
         # 检查单调递减（允许小波动）
         is_decreasing = all(
-            loss_history[i] >= loss_history[i+1] - 0.01
-            for i in range(len(loss_history) - 1)
+            loss_history[i] >= loss_history[i + 1] - 0.01 for i in range(len(loss_history) - 1)
         )
 
         # 最终损失显著低于初始损失
@@ -376,7 +380,7 @@ class TrainingStabilityValidator:
             metric_value=improvement,
             expected_value=0.5,
             tolerance=0.0,
-            details=f"改进率={improvement:.2%}, 单调={is_decreasing}"
+            details=f"改进率={improvement:.2%}, 单调={is_decreasing}",
         )
 
         self.results.append(result)
@@ -415,7 +419,7 @@ class TrainingStabilityValidator:
             metric_value=1.0 if detected else 0.0,
             expected_value=1.0,
             tolerance=0.0,
-            details=f"检测到={detected}"
+            details=f"检测到={detected}",
         )
 
         self.results.append(result)
@@ -450,7 +454,7 @@ class TheoryValidationValidator:
             metric_value=sum_prob,
             expected_value=1.0,
             tolerance=1e-6,
-            details=f"概率和={sum_prob:.6f}"
+            details=f"概率和={sum_prob:.6f}",
         )
 
         self.results.append(result)
@@ -482,7 +486,7 @@ class TheoryValidationValidator:
             metric_value=interference,
             expected_value=0.5,
             tolerance=0.0,
-            details=f"干涉强度={interference:.6f}"
+            details=f"干涉强度={interference:.6f}",
         )
 
         self.results.append(result)
@@ -532,10 +536,10 @@ class VerificationSuite:
     def generate_report(self) -> Dict[str, Any]:
         """生成测试报告"""
         all_results = (
-            self.complex_validator.results +
-            self.hardware_validator.results +
-            self.training_validator.results +
-            self.theory_validator.results
+            self.complex_validator.results
+            + self.hardware_validator.results
+            + self.training_validator.results
+            + self.theory_validator.results
         )
 
         passed = sum(1 for r in all_results if r.passed)
@@ -561,19 +565,18 @@ class VerificationSuite:
                 logger.info(f"    期望: {result.expected_value}, 实际: {result.metric_value}")
 
         return {
-            'total': total,
-            'passed': passed,
-            'failed': total - passed,
-            'pass_rate': pass_rate,
-            'results': all_results
+            "total": total,
+            "passed": passed,
+            "failed": total - passed,
+            "pass_rate": pass_rate,
+            "results": all_results,
         }
 
 
 def main():
     """主函数"""
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
     # 运行验证套件
@@ -581,19 +584,26 @@ def main():
     report = suite.run_all_tests()
 
     # 保存报告
-    output_dir = Path('./verification_results')
+    output_dir = Path("./verification_results")
     output_dir.mkdir(exist_ok=True)
 
     import json
-    with open(output_dir / 'test_report.json', 'w', encoding='utf-8') as f:
-        json.dump(report, f, indent=2, ensure_ascii=False, default=lambda x: float(x) if isinstance(x, (np.integer, np.floating)) else x.__dict__)
+
+    with open(output_dir / "test_report.json", "w", encoding="utf-8") as f:
+        json.dump(
+            report,
+            f,
+            indent=2,
+            ensure_ascii=False,
+            default=lambda x: float(x) if isinstance(x, (np.integer, np.floating)) else x.__dict__,
+        )
 
     logger.info(f"\n测试报告已保存: {output_dir / 'test_report.json'}")
 
     # 返回退出码
-    exit_code = 0 if report['pass_rate'] >= 0.8 else 1
+    exit_code = 0 if report["pass_rate"] >= 0.8 else 1
     return exit_code
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     exit(main())

@@ -48,14 +48,23 @@ print("-" * 70)
 
 param_results = []
 for cfg in configs:
-    dim, layers, heads, name = cfg['dim'], cfg['layers'], cfg['heads'], cfg['name']
+    dim, layers, heads, name = cfg["dim"], cfg["layers"], cfg["heads"], cfg["name"]
     vocab = 100
     ffn_dim = dim * 4
 
-    qa = QuantumArch(vocab_size=vocab, dim=dim, num_layers=layers, num_heads=heads,
-                     ffn_dim=ffn_dim, max_seq_len=256, topk_ratio=0.15,
-                     collapse_enabled=True, dropout=0.0, qsa_mode='topk',
-                     output_dim=vocab)
+    qa = QuantumArch(
+        vocab_size=vocab,
+        dim=dim,
+        num_layers=layers,
+        num_heads=heads,
+        ffn_dim=ffn_dim,
+        max_seq_len=256,
+        topk_ratio=0.15,
+        collapse_enabled=True,
+        dropout=0.0,
+        qsa_mode="topk",
+        output_dim=vocab,
+    )
 
     class StdTransformer(nn.Module):
         def __init__(self):
@@ -63,8 +72,13 @@ for cfg in configs:
             self.emb = nn.Embedding(vocab, dim)
             self.pos = nn.Embedding(256, dim)
             enc_layer = nn.TransformerEncoderLayer(
-                d_model=dim, nhead=heads, dim_feedforward=ffn_dim,
-                dropout=0.0, activation='gelu', batch_first=True)
+                d_model=dim,
+                nhead=heads,
+                dim_feedforward=ffn_dim,
+                dropout=0.0,
+                activation="gelu",
+                batch_first=True,
+            )
             self.encoder = nn.TransformerEncoder(enc_layer, num_layers=layers)
             self.head = nn.Linear(dim, vocab)
 
@@ -81,9 +95,9 @@ for cfg in configs:
     st_params = sum(p.numel() for p in st.parameters())
     ratio = qa_params / st_params
 
-    param_results.append({
-        'name': name, 'qa_params': qa_params, 'st_params': st_params, 'ratio': ratio
-    })
+    param_results.append(
+        {"name": name, "qa_params": qa_params, "st_params": st_params, "ratio": ratio}
+    )
 
     print(f"  {name:<10} {qa_params:<18,} {st_params:<18,} {ratio:<12.2f}×")
 
@@ -100,13 +114,22 @@ vocab = 100
 
 latency_results = []
 for cfg in configs:
-    dim, layers, heads, name = cfg['dim'], cfg['layers'], cfg['heads'], cfg['name']
+    dim, layers, heads, name = cfg["dim"], cfg["layers"], cfg["heads"], cfg["name"]
     ffn_dim = dim * 4
 
-    qa = QuantumArch(vocab_size=vocab, dim=dim, num_layers=layers, num_heads=heads,
-                     ffn_dim=ffn_dim, max_seq_len=256, topk_ratio=0.15,
-                     collapse_enabled=True, dropout=0.0, qsa_mode='topk',
-                     output_dim=vocab).eval()
+    qa = QuantumArch(
+        vocab_size=vocab,
+        dim=dim,
+        num_layers=layers,
+        num_heads=heads,
+        ffn_dim=ffn_dim,
+        max_seq_len=256,
+        topk_ratio=0.15,
+        collapse_enabled=True,
+        dropout=0.0,
+        qsa_mode="topk",
+        output_dim=vocab,
+    ).eval()
 
     class StdTransformer(nn.Module):
         def __init__(self):
@@ -114,8 +137,13 @@ for cfg in configs:
             self.emb = nn.Embedding(vocab, dim)
             self.pos = nn.Embedding(256, dim)
             enc_layer = nn.TransformerEncoderLayer(
-                d_model=dim, nhead=heads, dim_feedforward=ffn_dim,
-                dropout=0.0, activation='gelu', batch_first=True)
+                d_model=dim,
+                nhead=heads,
+                dim_feedforward=ffn_dim,
+                dropout=0.0,
+                activation="gelu",
+                batch_first=True,
+            )
             self.encoder = nn.TransformerEncoder(enc_layer, num_layers=layers)
             self.head = nn.Linear(dim, vocab)
 
@@ -133,7 +161,7 @@ for cfg in configs:
     # 预热
     with torch.no_grad():
         for _ in range(5):
-            _ = qa({'token_ids': tids}, training=False)
+            _ = qa({"token_ids": tids}, training=False)
             _ = st(tids)
 
     # 计时
@@ -142,7 +170,7 @@ for cfg in configs:
     for _ in range(20):
         with torch.no_grad():
             t0 = time.perf_counter()
-            _ = qa({'token_ids': tids}, training=False)
+            _ = qa({"token_ids": tids}, training=False)
             t1 = time.perf_counter()
             _ = st(tids)
             t2 = time.perf_counter()
@@ -153,12 +181,12 @@ for cfg in configs:
     avg_st = np.mean(times_st)
     speedup = avg_st / avg_qa
 
-    latency_results.append({
-        'name': name, 'qa_ms': avg_qa, 'st_ms': avg_st, 'speedup': speedup
-    })
+    latency_results.append({"name": name, "qa_ms": avg_qa, "st_ms": avg_st, "speedup": speedup})
 
-    print(f"  {name:<10} QA: {avg_qa:.2f}ms  ST: {avg_st:.2f}ms  "
-          f"比率: {1/speedup:.2f}× (ST/QA: {speedup:.2f}×)")
+    print(
+        f"  {name:<10} QA: {avg_qa:.2f}ms  ST: {avg_st:.2f}ms  "
+        f"比率: {1/speedup:.2f}× (ST/QA: {speedup:.2f}×)"
+    )
 
 # ============================================================================
 # 3. 反向传播梯度质量
@@ -175,10 +203,20 @@ ffn_dim = dim * 4
 batch = 8
 seq_len = 16
 
-qa = QuantumArch(vocab_size=vocab, dim=dim, num_layers=layers, num_heads=heads,
-                 ffn_dim=ffn_dim, max_seq_len=256, topk_ratio=0.15,
-                 collapse_enabled=True, dropout=0.0, qsa_mode='topk',
-                 output_dim=vocab)
+qa = QuantumArch(
+    vocab_size=vocab,
+    dim=dim,
+    num_layers=layers,
+    num_heads=heads,
+    ffn_dim=ffn_dim,
+    max_seq_len=256,
+    topk_ratio=0.15,
+    collapse_enabled=True,
+    dropout=0.0,
+    qsa_mode="topk",
+    output_dim=vocab,
+)
+
 
 class StdTransformer2(nn.Module):
     def __init__(self):
@@ -186,8 +224,13 @@ class StdTransformer2(nn.Module):
         self.emb = nn.Embedding(vocab, dim)
         self.pos = nn.Embedding(256, dim)
         enc_layer = nn.TransformerEncoderLayer(
-            d_model=dim, nhead=heads, dim_feedforward=ffn_dim,
-            dropout=0.0, activation='gelu', batch_first=True)
+            d_model=dim,
+            nhead=heads,
+            dim_feedforward=ffn_dim,
+            dropout=0.0,
+            activation="gelu",
+            batch_first=True,
+        )
         self.encoder = nn.TransformerEncoder(enc_layer, num_layers=layers)
         self.head = nn.Linear(dim, vocab)
 
@@ -198,6 +241,7 @@ class StdTransformer2(nn.Module):
         h = self.encoder(h)
         return self.head(h)
 
+
 st = StdTransformer2()
 
 tids = torch.randint(0, vocab, (batch, seq_len))
@@ -205,8 +249,8 @@ labels = torch.randint(0, vocab, (batch, seq_len))
 
 # QA 训练步
 qa.train()
-qa_out = qa({'token_ids': tids}, training=True)
-qa_loss = F.cross_entropy(qa_out['output'].view(-1, vocab), labels.view(-1))
+qa_out = qa({"token_ids": tids}, training=True)
+qa_loss = F.cross_entropy(qa_out["output"].view(-1, vocab), labels.view(-1))
 qa_loss.backward()
 
 qa_grad_norms = []
@@ -227,16 +271,20 @@ for name, p in st.named_parameters():
 
 print(f"  QuantumArch:")
 print(f"    Loss: {qa_loss.item():.4f}")
-print(f"    梯度范数: mean={np.mean(qa_grad_norms):.6f}, "
-      f"median={np.median(qa_grad_norms):.6f}, "
-      f"max={np.max(qa_grad_norms):.6f}, "
-      f"梯度数={len(qa_grad_norms)}")
+print(
+    f"    梯度范数: mean={np.mean(qa_grad_norms):.6f}, "
+    f"median={np.median(qa_grad_norms):.6f}, "
+    f"max={np.max(qa_grad_norms):.6f}, "
+    f"梯度数={len(qa_grad_norms)}"
+)
 print(f"  StandardTransformer:")
 print(f"    Loss: {st_loss.item():.4f}")
-print(f"    梯度范数: mean={np.mean(st_grad_norms):.6f}, "
-      f"median={np.median(st_grad_norms):.6f}, "
-      f"max={np.max(st_grad_norms):.6f}, "
-      f"梯度数={len(st_grad_norms)}")
+print(
+    f"    梯度范数: mean={np.mean(st_grad_norms):.6f}, "
+    f"median={np.median(st_grad_norms):.6f}, "
+    f"max={np.max(st_grad_norms):.6f}, "
+    f"梯度数={len(st_grad_norms)}"
+)
 
 # ============================================================================
 # 4. 酉性约束验证
@@ -276,8 +324,8 @@ for step in range(5):
     labels = torch.randint(0, vocab, (batch, seq_len))
 
     qa_opt.zero_grad()
-    qa_out = qa({'token_ids': tids}, training=True)
-    qa_loss = F.cross_entropy(qa_out['output'].view(-1, vocab), labels.view(-1))
+    qa_out = qa({"token_ids": tids}, training=True)
+    qa_loss = F.cross_entropy(qa_out["output"].view(-1, vocab), labels.view(-1))
     qa_loss.backward()
     qa_opt.step()
     qa_losses.append(qa_loss.item())
@@ -292,9 +340,11 @@ for step in range(5):
 print(f"  Step | QA Loss  | ST Loss  | QA 趋势 | ST 趋势")
 print(f"  -----|----------|----------|---------|---------")
 for i in range(5):
-    qa_trend = "↓" if i > 0 and qa_losses[i] < qa_losses[i-1] else "↑" if i > 0 else " "
-    st_trend = "↓" if i > 0 and st_losses[i] < st_losses[i-1] else "↑" if i > 0 else " "
-    print(f"  {i+1:4d} | {qa_losses[i]:.4f}   | {st_losses[i]:.4f}   | {qa_trend}        | {st_trend}")
+    qa_trend = "↓" if i > 0 and qa_losses[i] < qa_losses[i - 1] else "↑" if i > 0 else " "
+    st_trend = "↓" if i > 0 and st_losses[i] < st_losses[i - 1] else "↑" if i > 0 else " "
+    print(
+        f"  {i+1:4d} | {qa_losses[i]:.4f}   | {st_losses[i]:.4f}   | {qa_trend}        | {st_trend}"
+    )
 
 qa_decline = (qa_losses[0] - qa_losses[-1]) / qa_losses[0] * 100
 st_decline = (st_losses[0] - st_losses[-1]) / st_losses[0] * 100
@@ -313,10 +363,20 @@ layers = 2
 heads = 4
 seq_lens = [16, 32, 64, 128]
 
-qa_scale = QuantumArch(vocab_size=vocab, dim=dim, num_layers=layers, num_heads=heads,
-                       ffn_dim=ffn_dim, max_seq_len=256, topk_ratio=0.15,
-                       collapse_enabled=True, dropout=0.0, qsa_mode='topk',
-                       output_dim=vocab).eval()
+qa_scale = QuantumArch(
+    vocab_size=vocab,
+    dim=dim,
+    num_layers=layers,
+    num_heads=heads,
+    ffn_dim=ffn_dim,
+    max_seq_len=256,
+    topk_ratio=0.15,
+    collapse_enabled=True,
+    dropout=0.0,
+    qsa_mode="topk",
+    output_dim=vocab,
+).eval()
+
 
 class StdTransformer3(nn.Module):
     def __init__(self):
@@ -324,8 +384,13 @@ class StdTransformer3(nn.Module):
         self.emb = nn.Embedding(vocab, dim)
         self.pos = nn.Embedding(256, dim)
         enc_layer = nn.TransformerEncoderLayer(
-            d_model=dim, nhead=heads, dim_feedforward=ffn_dim,
-            dropout=0.0, activation='gelu', batch_first=True)
+            d_model=dim,
+            nhead=heads,
+            dim_feedforward=ffn_dim,
+            dropout=0.0,
+            activation="gelu",
+            batch_first=True,
+        )
         self.encoder = nn.TransformerEncoder(enc_layer, num_layers=layers)
         self.head = nn.Linear(dim, vocab)
 
@@ -335,6 +400,7 @@ class StdTransformer3(nn.Module):
         h = self.emb(x) + self.pos(p)
         h = self.encoder(h)
         return self.head(h)
+
 
 st_scale = StdTransformer3().eval()
 
@@ -347,7 +413,7 @@ for sl in seq_lens:
 
     with torch.no_grad():
         # 预热
-        _ = qa_scale({'token_ids': tids}, training=False)
+        _ = qa_scale({"token_ids": tids}, training=False)
         _ = st_scale(tids)
 
         # 计时
@@ -355,7 +421,7 @@ for sl in seq_lens:
         times_st = []
         for _ in range(10):
             t0 = time.perf_counter()
-            _ = qa_scale({'token_ids': tids}, training=False)
+            _ = qa_scale({"token_ids": tids}, training=False)
             t1 = time.perf_counter()
             _ = st_scale(tids)
             t2 = time.perf_counter()
@@ -366,7 +432,7 @@ for sl in seq_lens:
     avg_st = np.mean(times_st)
     ratio = avg_qa / avg_st if avg_st > 0 else 0
 
-    scaling_data.append({'seq_len': sl, 'qa_ms': avg_qa, 'st_ms': avg_st, 'ratio': ratio})
+    scaling_data.append({"seq_len": sl, "qa_ms": avg_qa, "st_ms": avg_st, "ratio": ratio})
     print(f"  {sl:<10} {avg_qa:<12.2f} {avg_st:<12.2f} {ratio:<10.2f}")
 
 # ============================================================================
@@ -405,36 +471,36 @@ print("  实验完成！保存结果...")
 print("=" * 70)
 
 all_results = {
-    'timestamp': datetime.now().isoformat(),
-    'environment': {
-        'pytorch': torch.__version__,
-        'device': str(device),
-        'python': sys.version.split()[0],
+    "timestamp": datetime.now().isoformat(),
+    "environment": {
+        "pytorch": torch.__version__,
+        "device": str(device),
+        "python": sys.version.split()[0],
     },
-    'parameters': param_results,
-    'latency': latency_results,
-    'gradient_quality': {
-        'qa_loss': qa_losses,
-        'st_loss': st_losses,
-        'qa_grad_mean': float(np.mean(qa_grad_norms)),
-        'st_grad_mean': float(np.mean(st_grad_norms)),
+    "parameters": param_results,
+    "latency": latency_results,
+    "gradient_quality": {
+        "qa_loss": qa_losses,
+        "st_loss": st_losses,
+        "qa_grad_mean": float(np.mean(qa_grad_norms)),
+        "st_grad_mean": float(np.mean(st_grad_norms)),
     },
-    'scaling': scaling_data,
-    'qci_efficiency': {
-        'low_threshold': {
-            'early_exit_rate': m_low['collapse_early_exit_rate'],
-            'entropy': m_low['collapse_entropy'],
+    "scaling": scaling_data,
+    "qci_efficiency": {
+        "low_threshold": {
+            "early_exit_rate": m_low["collapse_early_exit_rate"],
+            "entropy": m_low["collapse_entropy"],
         },
-        'high_threshold': {
-            'early_exit_rate': m_high['collapse_early_exit_rate'],
-            'entropy': m_high['collapse_entropy'],
-        }
+        "high_threshold": {
+            "early_exit_rate": m_high["collapse_early_exit_rate"],
+            "entropy": m_high["collapse_entropy"],
+        },
     },
 }
 
 output_dir = Path(__file__).parent
-json_path = output_dir / 'experiment_results.json'
-with open(json_path, 'w', encoding='utf-8') as f:
+json_path = output_dir / "experiment_results.json"
+with open(json_path, "w", encoding="utf-8") as f:
     json.dump(all_results, f, indent=2, ensure_ascii=False)
 
 print(f"  JSON 结果: {json_path}")
