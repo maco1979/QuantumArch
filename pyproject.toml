@@ -41,16 +41,23 @@ dev = [
     "isort>=5.12.0",
 ]
 
-[tool.setuptools]
-# 显式列出所有顶层包，解决 flat layout 多包歧义问题
-packages = [
-    "design",
-    "experiments",
-    "engineering",
-    "paper_system",
-    "quantum_core",
-    "verification_suite",
-    "optimization_system",
+[tool.setuptools.packages.find]
+# 解决 flat layout 多包歧义：明确列出所有需要包含的顶层目录
+include = [
+    "design*",
+    "experiments*",
+    "engineering*",
+    "paper_system*",
+    "quantum_core*",
+    "verification_suite*",
+    "optimization_system*",
+]
+# 排除不需要打包的目录
+exclude = [
+    "htmlcov*",
+    "tests*",
+    "benchmark*",
+    "docs*",
 ]
 
 [tool.pyright]
