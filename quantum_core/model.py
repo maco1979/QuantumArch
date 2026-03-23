@@ -183,10 +183,17 @@ class QuantumArch(nn.Module):
             all_metrics[f"block_{i}"] = layer_metrics
 
             # 检查是否应该早退
-            if self.collapse_enabled and training:
-                collapse_key = f"qci_collapse_early_exit_rate"
-                if collapse_key in layer_metrics:
-                    if layer_metrics[collapse_key] > 0.95:
+            # 注：QCI 在 quantum_block.py 中仅在 training=True 时运行，
+            # 推理阶段应由调用者决定是否启用早退（通过 inference_mode 参数控制）。
+            # key 格式：block.py 将 QCI 的 metrics 加前缀 'qci_'，
+            # 坍缩模块输出 'collapse_early_exit_rate'，合并后为 'qci_collapse_early_exit_rate'
+            if self.collapse_enabled:
+                exit_key = "qci_collapse_early_exit_rate"
+                if exit_key in layer_metrics:
+                    exit_rate = layer_metrics[exit_key]
+                    # 训练时：95% 早退率触发全局早退
+                    # 推理时：不在此处触发（推理早退由 inference_early_exit 参数控制）
+                    if training and exit_rate > 0.95:
                         early_exit = True
                         break
 
@@ -194,8 +201,12 @@ class QuantumArch(nn.Module):
         z = self.final_norm(z)
 
         # ── 输出投影（复数 -> 实数）──
-        # 取模长作为最终实数表示
-        output = self.output_proj(z.real)  # 使用实部投影，避免复数损失
+        # 改进：使用复数绝对值（模长）作为实数投影输入，而非仅使用实部。
+        # 理由：|z| = √(Re²+Im²) 保留了完整的振幅信息；
+        #       仅用 Re(z) 会丢失虚部编码的相位信息。
+        # 对于需要完整复数输出的任务，可访问返回的 'hidden_state'。
+        z_real_repr = z.abs()  # (B, N, dim)，实数，保留模长信息
+        output = self.output_proj(z_real_repr)  # (B, N, output_dim)
 
         # 计算全局熵
         with torch.no_grad():
