@@ -151,7 +151,11 @@ class QuantumSuperpositionAttention(nn.Module):
         attn_entropy = von_neumann_entropy(attn_probs, dim=-1)  # (B, H, N)
 
         # ── 6. Top-K 筛选或完整注意力 ──
-        if self.mode == "topk" and training:
+        # topk 模式：训练和推理均使用 Top-K 干涉路由（O(n·k·d)），只有
+        # full 模式才强制使用完整 O(n²) 注意力（用于正确性验证/对比实验）。
+        # 修复：旧版仅在 training=True 时使用 topk，导致推理阶段退化为
+        # O(n²) full attention，丧失了 topk 的推理加速优势。
+        if self.mode == "topk":
             output = self._topk_attention(V, attn_probs, B, N)
         else:
             output = self._full_attention(V, attn_probs, attention_mask)
