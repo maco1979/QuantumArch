@@ -560,6 +560,13 @@ class QuantumEntanglementLayer(nn.Module):
     def _local_entangle(self, x: torch.Tensor, metrics: Dict[str, float]) -> torch.Tensor:
         """局部纠缠：对相邻 token 对应用纠缠门。
 
+        改进的奇数序列处理策略：
+        - 偶数 N：所有 token 都参与纠缠对，无边界问题
+        - 奇数 N：最后一个 token 与倒数第二个 token 组成额外的纠缠对
+          （覆盖重叠）。这样每个 token 至少参与一次纠缠，
+          避免末尾 token 因无配对而保持未纠缠状态，
+          造成不同位置 token 的信息更新不均衡。
+
         Args:
             x: (B, N, D) 复数
             metrics: 统计信息字典
@@ -574,21 +581,35 @@ class QuantumEntanglementLayer(nn.Module):
         entangled = x.clone()
 
         if self.use_adaptive:
-            # 自适应纠缠：批量处理相邻对
+            # 自适应纠缠：批量处理相邻对（0,1), (2,3), ...
             x_even = x[:, 0::2, :]  # (B, ceil(N/2), D)
             x_odd = x[:, 1::2, :]  # (B, floor(N/2), D)
 
             min_len = min(x_even.shape[1], x_odd.shape[1])
-            x_even = x_even[:, :min_len, :]
-            x_odd = x_odd[:, :min_len, :]
+            x_even_c = x_even[:, :min_len, :]
+            x_odd_c = x_odd[:, :min_len, :]
 
-            x_even_out, x_odd_out, strengths = self.entangle_gate(x_even, x_odd)
+            x_even_out, x_odd_out, strengths = self.entangle_gate(x_even_c, x_odd_c)
 
-            # 交错合并
             entangled[:, 0::2, :][:, :min_len, :] = x_even_out
             entangled[:, 1::2, :][:, :min_len, :] = x_odd_out
 
-            avg_strength = strengths.mean().item()
+            # ── 奇数 N 边界处理：最后一个 token 与倒数第二个额外纠缠 ──
+            # 注：min_len = N//2，此时 x_even 比 x_odd 多一个（N 为奇数）
+            if N % 2 == 1:
+                # 末尾落单 token 的索引 = N - 1 = 2 * (N//2)
+                last_idx = N - 1
+                second_last_idx = N - 2
+                # 用倒数第二个（已纠缠后的）状态作为配对，再纠缠一次末尾 token
+                a_extra = entangled[:, second_last_idx : second_last_idx + 1, :]  # (B, 1, D)
+                b_extra = x[:, last_idx : last_idx + 1, :]  # (B, 1, D)，使用原始未纠缠值
+                a_e_out, b_e_out, s_extra = self.entangle_gate(a_extra, b_extra)
+                # 只更新末尾 token（避免覆盖倒数第二个已完成的纠缠）
+                entangled[:, last_idx : last_idx + 1, :] = b_e_out
+                avg_strength = (strengths.mean() + s_extra.mean()).item() / 2
+            else:
+                avg_strength = strengths.mean().item()
+
             metrics["entanglement_strength"] = avg_strength
 
             # 纠缠度量
@@ -596,13 +617,21 @@ class QuantumEntanglementLayer(nn.Module):
                 ent_measure = concurrence(x_even_out, x_odd_out, dim=-1)
                 metrics["avg_concurrence"] = ent_measure.mean().item()
         else:
-            # 固定强度纠缠
+            # 固定强度纠缠（含奇数边界处理）
             for i in range(0, N - 1, 2):
                 a = x[:, i, :]
                 b = x[:, i + 1, :]
                 a_out, b_out = self.entangle_gate(a, b)
                 entangled[:, i, :] = a_out
                 entangled[:, i + 1, :] = b_out
+
+            # 奇数 N：额外处理最后一个 token
+            if N % 2 == 1:
+                last_idx = N - 1
+                a_extra = entangled[:, last_idx - 1, :]
+                b_extra = x[:, last_idx, :]
+                _, b_out_extra = self.entangle_gate(a_extra, b_extra)
+                entangled[:, last_idx, :] = b_out_extra
 
             metrics["entanglement_strength"] = 1.0  # 固定全强度
 
