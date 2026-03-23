@@ -565,9 +565,171 @@ class QGD(Optimizer):
         return optimizer
 
 
+
+# ──────────────────────────────────────────────
+# 学习率调度器：Warmup + 余弦退火
+# ──────────────────────────────────────────────
+
+
+class WarmupCosineScheduler:
+    """量子梯度下降的 Warmup + 余弦退火学习率调度器。
+
+    专为 QGD 设计：分别对模长学习率（mod_lr）和相位学习率（phase_lr）
+    执行独立的 warmup + 余弦退火，因为二者在训练初期需要不同的预热策略。
+
+    调度策略：
+    - Warmup 阶段（step ∈ [0, warmup_steps)）：
+        lr(t) = lr_max * t / warmup_steps    (线性预热)
+    - 余弦退火阶段（step ∈ [warmup_steps, total_steps]）：
+        lr(t) = lr_min + 0.5*(lr_max - lr_min)*(1 + cos(π*(t-warmup_steps)/(total_steps-warmup_steps)))
+
+    为何复数优化需要专门的调度：
+    - 模长学习率（mod_lr）过大会导致模长坍缩到 0（无法恢复）
+    - 相位学习率（phase_lr）过大会导致相位噪声累积，损害干涉质量
+    - 两者的 warmup 步数可独立配置，适应不同的收敛速度
+
+    Args:
+        optimizer: QGD 优化器实例
+        warmup_steps: 预热步数（建议 total_steps 的 5-10%）
+        total_steps: 总训练步数
+        mod_lr_max: 模长学习率峰值（默认从 optimizer.defaults 读取）
+        phase_lr_max: 相位学习率峰值（默认从 optimizer.defaults 读取）
+        mod_lr_min: 模长学习率最小值（默认 1e-6）
+        phase_lr_min: 相位学习率最小值（默认 mod_lr_min * 10）
+        last_step: 上一步的 step（用于恢复训练，-1 表示从头开始）
+    """
+
+    def __init__(
+        self,
+        optimizer: "QGD",
+        warmup_steps: int,
+        total_steps: int,
+        mod_lr_max: Optional[float] = None,
+        phase_lr_max: Optional[float] = None,
+        mod_lr_min: float = 1e-6,
+        phase_lr_min: Optional[float] = None,
+        last_step: int = -1,
+    ):
+        if not isinstance(optimizer, QGD):
+            raise TypeError(f"WarmupCosineScheduler 只支持 QGD 优化器，收到: {type(optimizer)}")
+        if warmup_steps >= total_steps:
+            raise ValueError(
+                f"warmup_steps({warmup_steps}) 必须小于 total_steps({total_steps})"
+            )
+
+        self.optimizer = optimizer
+        self.warmup_steps = warmup_steps
+        self.total_steps = total_steps
+
+        # 从优化器 defaults 读取峰值学习率
+        self.mod_lr_max = mod_lr_max or optimizer.defaults["mod_lr"]
+        self.phase_lr_max = phase_lr_max or optimizer.defaults["phase_lr"]
+
+        self.mod_lr_min = mod_lr_min
+        # 相位 lr 的衰减下限通常比模长大 10 倍（相位更需要保持探索性）
+        self.phase_lr_min = phase_lr_min or (mod_lr_min * 10)
+
+        self._step = last_step + 1  # 内部 step 计数（从 0 开始）
+
+    @property
+    def last_step(self) -> int:
+        """当前已执行的 step 数（从 0 开始）"""
+        return self._step
+
+    def _cosine_lr(self, t: int, lr_max: float, lr_min: float) -> float:
+        """计算余弦退火 lr 值。
+
+        Args:
+            t: 余弦退火阶段的相对步数（t=0 → lr_max，t=T → lr_min）
+            lr_max: 峰值学习率
+            lr_min: 最小学习率
+        Returns:
+            当前步的学习率
+        """
+        T = self.total_steps - self.warmup_steps
+        if T <= 0:
+            return lr_min
+        ratio = t / T
+        cosine_decay = 0.5 * (1.0 + math.cos(math.pi * ratio))
+        return lr_min + (lr_max - lr_min) * cosine_decay
+
+    def get_lr(self) -> dict:
+        """计算当前 step 对应的学习率（不修改优化器状态）。
+
+        Returns:
+            dict with 'mod_lr', 'phase_lr', 'step'
+        """
+        t = self._step
+        w = self.warmup_steps
+
+        if t < w:
+            # 线性 warmup
+            ratio = max(t, 1) / max(w, 1)
+            mod_lr = self.mod_lr_max * ratio
+            phase_lr = self.phase_lr_max * ratio
+        else:
+            # 余弦退火
+            t_cosine = t - w
+            mod_lr = self._cosine_lr(t_cosine, self.mod_lr_max, self.mod_lr_min)
+            phase_lr = self._cosine_lr(t_cosine, self.phase_lr_max, self.phase_lr_min)
+
+        return {"mod_lr": mod_lr, "phase_lr": phase_lr, "step": t}
+
+    def step(self):
+        """更新优化器的学习率并递增 step 计数。
+
+        调用时机：每次 optimizer.step() 之后调用一次。
+
+        Example:
+            >>> for batch in dataloader:
+            ...     loss = model(batch)
+            ...     optimizer.zero_grad()
+            ...     loss.backward()
+            ...     optimizer.step()
+            ...     scheduler.step()   # ← 在 optimizer.step() 后调用
+        """
+        lr_dict = self.get_lr()
+        for group in self.optimizer.param_groups:
+            group["mod_lr"] = lr_dict["mod_lr"]
+            group["phase_lr"] = lr_dict["phase_lr"]
+        self._step += 1
+
+    def state_dict(self) -> dict:
+        """返回调度器状态（用于保存 checkpoint）。"""
+        return {
+            "warmup_steps": self.warmup_steps,
+            "total_steps": self.total_steps,
+            "mod_lr_max": self.mod_lr_max,
+            "phase_lr_max": self.phase_lr_max,
+            "mod_lr_min": self.mod_lr_min,
+            "phase_lr_min": self.phase_lr_min,
+            "_step": self._step,
+        }
+
+    def load_state_dict(self, state: dict):
+        """从 checkpoint 恢复调度器状态。"""
+        self.warmup_steps = state["warmup_steps"]
+        self.total_steps = state["total_steps"]
+        self.mod_lr_max = state["mod_lr_max"]
+        self.phase_lr_max = state["phase_lr_max"]
+        self.mod_lr_min = state["mod_lr_min"]
+        self.phase_lr_min = state["phase_lr_min"]
+        self._step = state["_step"]
+
+    def __repr__(self) -> str:
+        lr = self.get_lr()
+        return (
+            f"WarmupCosineScheduler("
+            f"step={self._step}/{self.total_steps}, "
+            f"warmup={self.warmup_steps}, "
+            f"mod_lr={lr['mod_lr']:.2e}, "
+            f"phase_lr={lr['phase_lr']:.2e})"
+        )
+
+
 # ──────────────────────────────────────────────
 # 向后兼容
 # ──────────────────────────────────────────────
 
 # 保留旧版 QGD 类名（QGD 本身就是新版）
-__all__ = ["QGD"]
+__all__ = ["QGD", "WarmupCosineScheduler"]
