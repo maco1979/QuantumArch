@@ -31,17 +31,21 @@ class ComplexLayerNorm(nn.Module):
     1. z_flat = [Re(z), Im(z)]  ∈ R^{2d}
     2. z_norm = LayerNorm(z_flat)  — 标准实数 LN
     3. z_out = γ · complex(z_norm[:d], z_norm[d:]) + β
+    4. [可选] 若 scale_by_magnitude=True：z_out /= ||z_out||₂ · √d
+       将归一化后的量子态重新投影到 d 维单位球附近
 
     这保证了：
     - 实部和虚部各自均值为 0、方差为 1
     - 实部与虚部之间的协方差也被归一化
     - 复数仿射变换 γ 可学习模长缩放和相位旋转
+    - [可选] 量子态模长约束，保持态的物理有效性
 
     Args:
         normalized_shape: 归一化的特征维度大小（复数维度 d），必须 > 0
         eps: 数值稳定 epsilon
         elementwise_affine: 是否使用可学习的复数仿射参数
         dim: normalized_shape 的别名（二选一传入）
+        scale_by_magnitude: 是否在仿射后按模长归一化（保持量子态在单位球附近）
     """
 
     def __init__(
@@ -50,6 +54,7 @@ class ComplexLayerNorm(nn.Module):
         eps: float = 1e-6,
         elementwise_affine: bool = True,
         dim: Optional[int] = None,
+        scale_by_magnitude: bool = False,
     ):
         super().__init__()
         # 支持 dim 作为 normalized_shape 的别名（兼容 test_full_suite）
@@ -63,6 +68,7 @@ class ComplexLayerNorm(nn.Module):
         self.normalized_shape = normalized_shape
         self.eps = eps
         self.elementwise_affine = elementwise_affine
+        self.scale_by_magnitude = scale_by_magnitude
 
         if elementwise_affine:
             # 复数仿射参数：γ（增益）和 β（偏置）
@@ -110,12 +116,21 @@ class ComplexLayerNorm(nn.Module):
         if self.elementwise_affine:
             z_complex = self.gamma * z_complex + self.beta
 
+        # 可选：模长归一化，将量子态投影到 d 维单位球附近
+        # 归一化因子 = ||z||₂ / √d，使平均模长约为 1
+        # 这有助于维持量子态的物理有效性（|ψ|² = 1 约束）
+        if self.scale_by_magnitude:
+            mag = z_complex.abs().pow(2).sum(dim=-1, keepdim=True).sqrt()
+            target_mag = float(d) ** 0.5
+            z_complex = z_complex / (mag / target_mag + self.eps)
+
         return z_complex
 
     def extra_repr(self) -> str:
         return (
             f"normalized_shape={self.normalized_shape}, eps={self.eps}, "
-            f"affine={self.elementwise_affine}"
+            f"affine={self.elementwise_affine}, "
+            f"scale_by_magnitude={self.scale_by_magnitude}"
         )
 
 
