@@ -193,3 +193,104 @@ class ComplexGELU(nn.Module):
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
         return torch.complex(F.gelu(z.real), F.gelu(z.imag))
+
+
+class ComplexSwiGLU(nn.Module):
+    """复数 SwiGLU 门控激活函数。
+
+    SwiGLU 是 Transformer FFN 中效果最好的激活之一（PaLM, LLaMA 等采用）。
+    本模块将其推广到复数域：
+
+        ComplexSwiGLU(z₁, z₂) = z₁ ⊙ σ_C(z₂)
+
+    其中：
+    - z₁, z₂ 是同维度的复数张量（通过对上投影输出做等分或独立投影得到）
+    - σ_C(z) = SiLU(Re(z)) + i·SiLU(Im(z))  （SiLU = Swish = x·sigmoid(x)）
+    - ⊙ 是复数哈达玛积（逐元素复数乘法）
+
+    与 ModReLU 的对比：
+    - ModReLU：仅调节模长，保持相位 → 适合需要相位保真度的场景
+    - ComplexSwiGLU：同时调节模长和相位 → 更强的非线性表达能力
+
+    物理解释：
+    - 门控 z₂ 控制每个特征"让多少量子振幅通过"
+    - 复数 SiLU 保持了负值的梯度（不同于 ReLU 的硬截断）
+    - 结果是一个可微的、考虑相位的量子特征选择机制
+
+    Args:
+        dim: 输入/输出复数特征维度（注意：_内部_会将 dim 扩展到 2*dim 再等分）
+        split_input: 是否在内部做 2×上投影并等分（True：输入 dim 维，内部扩展；
+                     False：期望已经有两组 dim 维输入，手动传入 gate）
+        init_std: 门控线性层的初始化标准差
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        split_input: bool = True,
+        init_std: Optional[float] = None,
+    ):
+        super().__init__()
+        self.dim = dim
+        self.split_input = split_input
+
+        if split_input:
+            # 内部 2× 投影，统一接口（输入 dim 维 → 内部 2dim → 等分）
+            if init_std is None:
+                init_std = 1.0 / (dim ** 0.5)
+            self.gate_proj = nn.Linear(dim, dim, bias=False).to(torch.complex64)
+            nn.init.normal_(self.gate_proj.weight.data.real, std=init_std / 2 ** 0.5)
+            nn.init.normal_(self.gate_proj.weight.data.imag, std=init_std / 2 ** 0.5)
+
+    def _complex_swish(self, z: torch.Tensor) -> torch.Tensor:
+        """复数 SiLU（Swish）：对实部和虚部分别施加 SiLU。
+
+        SiLU(x) = x · sigmoid(x)
+
+        复数扩展：σ_C(z) = SiLU(Re(z)) + i·SiLU(Im(z))
+
+        特性：
+        - 保持相位信息（不同于 ReLU 的相位破坏）
+        - 光滑可微（SiLU 在 x ≈ -1.67 有唯一局部极小值）
+        - 输出范围包含负值，避免死神经元
+        """
+        return torch.complex(F.silu(z.real), F.silu(z.imag))
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        gate: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """
+        Args:
+            x: 复数输入 (..., dim)
+            gate: 可选的独立门控信号 (..., dim)。
+                  若 split_input=True 且未提供，则内部计算门控。
+        Returns:
+            门控后的复数输出 (..., dim)
+
+        Usage:
+            # 模式1：split_input=True（推荐，与 FFN 集成）
+            act = ComplexSwiGLU(dim=256, split_input=True)
+            out = act(x)   # x: (..., 256) → out: (..., 256)
+
+            # 模式2：手动传入两路信号
+            act = ComplexSwiGLU(dim=256, split_input=False)
+            gate_signal = compute_gate(x)
+            out = act(x, gate=gate_signal)
+        """
+        if gate is None:
+            if self.split_input:
+                # 内部门控投影
+                gate = self.gate_proj(x)
+            else:
+                raise ValueError(
+                    "split_input=False 时必须手动传入 gate 参数，"
+                    "或设置 split_input=True 让模块内部计算门控。"
+                )
+
+        # ComplexSwiGLU: x ⊙ σ_C(gate)
+        return x * self._complex_swish(gate)
+
+    def extra_repr(self) -> str:
+        return f"dim={self.dim}, split_input={self.split_input}"
