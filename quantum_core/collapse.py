@@ -388,12 +388,26 @@ class QuantumCollapseInference(nn.Module):
         # 决定每个 token 的处理方式
         if training:
             # 训练时：Gumbel-Softmax 式的可微坍缩决策
-            # 置信度 = sigmoid(-(entropy - tau_low) * temperature)
-            # temperature 控制从 soft 到 hard 的过渡
-            temperature = 5.0
+            # 温度退火策略：temperature 随步数从 T_init 衰减到 T_min
+            # - 训练初期（高温）：sigmoid 曲线平坦，决策差异小 → 更好的梯度流
+            # - 训练后期（低温）：sigmoid 接近阶跃函数 → 更精确的坍缩决策
+            #
+            # 退火公式：T(t) = T_min + (T_init - T_min) * exp(-t / decay_steps)
+            # 这里 t 由 AdaptiveThreshold 的 step_count 记录（有 adaptive_tau 时）
+            if self.adaptive_tau and self.threshold is not None:
+                step = self.threshold.step_count.item()
+                # T_init=2.0（温和起步），T_min=8.0（后期锐化），decay_steps=2000
+                # 注：温度从低 → 高（逆退火）会使决策边界越来越清晰
+                T_init = 2.0
+                T_max = 10.0
+                decay_steps = 2000.0
+                temperature = T_init + (T_max - T_init) * (1.0 - math.exp(-step / decay_steps))
+            else:
+                # 无自适应阈值时使用固定中等温度
+                temperature = 5.0
+
+            # confidence ∈ (0,1)：高值 → 高确定性 → 保持原始态
             confidence = torch.sigmoid(-(entropy - tau_low) * temperature)  # (B, N)
-            # confidence ≈ 1 → 高确定性 → 保持原始态
-            # confidence ≈ 0 → 低确定性 → 坍缩
 
             # Soft 坍缩：混合原始态和坍缩态
             collapsed, probs = self.povm(x)  # probs: (B, N, collapse_dim)
