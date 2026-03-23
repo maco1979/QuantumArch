@@ -260,6 +260,67 @@ def real_to_complex(x: torch.Tensor) -> torch.Tensor:
     return torch.complex(x, torch.zeros_like(x))
 
 
+def phase_coherence(z: torch.Tensor, dim: int = -1) -> torch.Tensor:
+    """计算复数张量沿指定维度的相位相干性（Phase Coherence）。
+
+    相位相干性衡量一组复数振幅的相位是否"指向同一方向"，
+    是量子干涉强度的重要指标：
+
+        C = |mean(exp(i·φ_k))| = |Σ exp(i·φ_k)| / N
+
+    其中 φ_k = arg(z_k) 为各振幅的相位。
+
+    取值范围 [0, 1]：
+    - C ≈ 1：高相干性，所有相位接近一致（相长干涉为主）
+    - C ≈ 0：低相干性，相位随机分布（相消干涉为主）
+
+    与 von_neumann_entropy 的对比：
+    - 熵度量：概率分布的集中度（Born 概率 |z|²）
+    - 相干性：相位分布的集中度（角度信息）
+
+    Args:
+        z: 复数张量 (..., d)
+        dim: 求均值的维度
+    Returns:
+        实数相干性标量 (...)，范围 [0, 1]
+
+    Example:
+        >>> z = torch.tensor([1+0j, 0+1j, -1+0j], dtype=torch.complex64)
+        >>> phase_coherence(z)  # ≈ 0.0（三相位均匀分布，相消）
+        >>> z2 = torch.ones(4, dtype=torch.complex64)
+        >>> phase_coherence(z2)  # ≈ 1.0（所有相位为 0，完全相长）
+    """
+    # 归一化到单位圆（仅保留相位信息）
+    z_unit = z / (z.abs().clamp(min=1e-8))  # exp(i·φ_k)
+
+    # 相位向量的平均模长
+    coherence = z_unit.mean(dim=dim).abs()
+    return coherence
+
+
+def phase_gradient(z: torch.Tensor, dim: int = -1) -> torch.Tensor:
+    """计算相邻元素的相位差（相位梯度），用于检测相位连续性。
+
+    相位梯度反映量子态相位的"变化速率"，
+    在 QIR 路由和 QEL 纠缠质量分析中用于识别相位跳变。
+
+    Args:
+        z: 复数张量 (..., d)，d >= 2
+        dim: 计算差分的维度（必须 >= 1 才有相邻元素）
+    Returns:
+        相位梯度张量 (..., d-1)，实数，单位：弧度
+
+    Raises:
+        ValueError: 如果指定维度长度 < 2
+    """
+    phase = z.angle()  # (..., d)
+    # 沿 dim 计算相邻相位差
+    dphase = torch.diff(phase, dim=dim)
+    # 将相位差映射到 [-π, π]（主值）
+    dphase = torch.remainder(dphase + torch.pi, 2 * torch.pi) - torch.pi
+    return dphase
+
+
 def check_unitarity(W: torch.Tensor, eps: float = 1e-4) -> dict:
     """检查矩阵的酉性 W†W = I。
 
