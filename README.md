@@ -29,16 +29,42 @@
 
 ```
 量子架构/
-├── docs/                    # 理论文档
-│   ├── whitepaper.md        # 完整理论白皮书
-│   ├── architecture.md      # 架构设计文档
-│   └── comparison.md        # 与Transformer对比分析
-├── design/                  # 设计规范
-│   ├── core_concepts.md     # 核心概念定义
-│   └── api_design.md        # API设计规范
-├── experiments/             # 实验记录
-└── README.md                # 项目说明
+├── docs/                         # 理论文档
+│   ├── whitepaper.md             # 完整理论白皮书
+│   ├── architecture.md           # 架构设计文档
+│   ├── comparison.md             # 与Transformer对比分析
+│   └── core/
+│       ├── qgd_math_and_stability.md  # QGD数学推导与训练稳定性
+│       └── qir_theory.md              # QIR量子干涉路由理论 ✨NEW
+├── quantum_core/                 # 核心实现模块
+│   ├── attention.py              # QSA量子叠加注意力
+│   ├── entanglement.py           # QEL量子纠缠层
+│   ├── collapse.py               # QCI量子坍缩推理
+│   ├── routing.py                # QIR量子干涉路由
+│   ├── optimizer.py              # QGD量子梯度下降
+│   ├── complex_ops.py            # 复数运算工具
+│   ├── activations.py            # 复数激活函数
+│   ├── normalization.py          # 复数层归一化
+│   ├── quantum_block.py          # 量子Transformer块
+│   ├── model.py                  # 主模型
+│   ├── state_init.py             # 量子态初始化 ✨NEW
+│   ├── circuit_sim.py            # 量子电路模拟层 ✨NEW
+│   ├── training_callbacks.py     # 训练监控回调系统 ✨NEW
+│   ├── error_correction.py       # 量子误差缓解 ✨NEW
+│   └── experiment_config.py      # 实验配置管理 ✨NEW
+├── benchmark/                    # 性能基准测试
+│   ├── qsa_benchmark.py          # QSA vs 标准注意力基准 ✨NEW
+│   └── performance_profiler.py   # 性能分析器 ✨NEW
+├── design/                       # 设计规范
+│   ├── core_concepts.md          # 核心概念定义
+│   └── architecture.md           # 系统架构设计
+├── optimization_system/          # 自动化优化系统
+├── verification_suite/           # 技术验证套件
+├── experiments/                  # 实验记录
+└── README.md                     # 项目说明
 ```
+
+> **v1.1 新增模块**: 量子态初始化、电路模拟层、训练监控回调、量子误差缓解、实验配置管理、QSA基准测试、性能分析器、QIR理论文档。
 
 ---
 
