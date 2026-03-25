@@ -111,12 +111,15 @@ class QuantumSuperpositionAttention(nn.Module):
         x: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         training: bool = True,
+        causal: bool = False,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Args:
             x: 复数输入 (batch, seq_len, dim)
-            attention_mask: 可选的注意力掩码 (batch, seq_len)
+            attention_mask: 可选的 padding 掩码 (batch, seq_len)，0 表示忽略位置
             training: 是否训练模式
+            causal: 是否使用因果掩码（下三角注意力），适配自回归语言模型。
+                    启用时 token i 只能关注 j <= i 的位置，防止信息泄漏。
         Returns:
             (output, metrics)
             output: 复数张量 (batch, seq_len, dim)
@@ -144,13 +147,27 @@ class QuantumSuperpositionAttention(nn.Module):
         phase_shift = self.phase_fn(alpha_mag.detach())  # detach 模长用于相位调制
         beta = alpha * torch.exp(1j * phase_shift)
 
-        # ── 4. Born 概率 ──
+        # ── 4. 因果掩码（自回归模式）──
+        # 构造下三角掩码矩阵，确保位置 i 只关注 j <= i（防止未来信息泄漏）
+        # causal_mask[i, j] = True 表示位置 i 可以关注位置 j
+        if causal:
+            causal_mask = torch.tril(
+                torch.ones(N, N, device=x.device, dtype=torch.bool)
+            )  # (N, N)
+            # 将下三角外的位置（未来位置）的 beta 置为极小值，使 Born 概率接近 0
+            mask_value = torch.finfo(torch.float32).min
+            beta = beta.masked_fill(
+                ~causal_mask.unsqueeze(0).unsqueeze(0),  # (1, 1, N, N)
+                complex(mask_value, 0.0),
+            )
+
+        # ── 5. Born 概率 ──
         attn_probs = born_normalize(beta, dim=-1)  # (B, H, N, N)
 
-        # ── 5. 注意力熵（度量信息集中度）──
+        # ── 6. 注意力熵（度量信息集中度）──
         attn_entropy = von_neumann_entropy(attn_probs, dim=-1)  # (B, H, N)
 
-        # ── 6. Top-K 筛选或完整注意力 ──
+        # ── 7. Top-K 筛选或完整注意力 ──
         # topk 模式：训练和推理均使用 Top-K 干涉路由（O(n·k·d)），只有
         # full 模式才强制使用完整 O(n²) 注意力（用于正确性验证/对比实验）。
         # 修复：旧版仅在 training=True 时使用 topk，导致推理阶段退化为
@@ -160,11 +177,11 @@ class QuantumSuperpositionAttention(nn.Module):
         else:
             output = self._full_attention(V, attn_probs, attention_mask)
 
-        # ── 7. 多头合并 ──
+        # ── 8. 多头合并 ──
         # (B, num_heads, N, head_dim) -> (B, N, D)
         output = output.transpose(1, 2).contiguous().view(B, N, D)
 
-        # ── 8. 输出投影 ──
+        # ── 9. 输出投影 ──
         output = self.Wo(output)
 
         # 应用 dropout
@@ -178,6 +195,7 @@ class QuantumSuperpositionAttention(nn.Module):
             "interference_phase_std": phase_shift.std().item(),
             "topk_ratio_actual": self.topk_ratio,
             "qsa_mode": self.mode,
+            "causal": causal,
         }
 
         return output, metrics

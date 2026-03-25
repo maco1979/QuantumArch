@@ -160,6 +160,43 @@ class POVMProjector(nn.Module):
     def extra_repr(self) -> str:
         return f"in_dim={self.in_dim}, out_dim={self.out_dim}"
 
+    def orthogonality_regularization_loss(self) -> torch.Tensor:
+        """计算测量基的正交正则化损失。
+
+        POVM 测量基 {|φ_m⟩} 越接近正交，完整性约束 Σ E_m ≈ I 越自然成立，
+        坍缩概率分布也更稳定。若基向量高度重叠，不同测量结果将产生大量冗余，
+        降低信息利用率。
+
+        正则化损失定义为：
+            L_ortho = ||B·B† - I||_F² / out_dim
+
+        其中 B = measurement_basis (out_dim, in_dim)。
+        - 当 out_dim <= in_dim 时：B·B† → I_{out_dim}（等距矩阵行正交）
+        - 当 out_dim > in_dim 时：完整正交不可达，惩罚偏离比例单位矩阵的程度
+
+        Returns:
+            正则化损失标量（无量纲，越小越正交）
+        """
+        basis = self.measurement_basis  # (out_dim, in_dim)
+        gram = basis @ basis.conj().T  # (out_dim, out_dim)
+
+        # 目标：gram ≈ I（或接近 I * scale 当 out_dim > in_dim）
+        # 这里统一目标为 I（归一化基的 Gram 矩阵）
+        identity = torch.eye(self.out_dim, dtype=torch.complex64, device=basis.device)
+        diff = gram - identity
+        loss = diff.abs().pow(2).sum() / self.out_dim
+        return loss.real  # 虚部理论为零（Gram 矩阵 Hermitian），取实部保证标量
+
+    def renormalize_basis(self):
+        """将测量基向量重新归一化为单位向量（in-place 操作）。
+
+        推荐在每 N 步调用一次，防止基向量模长漂移后
+        概率计算（α_m · |⟨φ_m|ψ⟩|²）出现数值不稳定。
+        """
+        with torch.no_grad():
+            norms = self.measurement_basis.abs().pow(2).sum(dim=-1, keepdim=True).sqrt()
+            self.measurement_basis.div_(norms.clamp(min=1e-8))
+
 
 class AdaptiveThreshold(nn.Module):
     """自适应坍缩阈值模块。

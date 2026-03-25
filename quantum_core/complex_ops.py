@@ -342,3 +342,116 @@ def check_unitarity(W: torch.Tensor, eps: float = 1e-4) -> dict:
         "violation_norm": violation,
         "max_deviation": max_dev,
     }
+
+
+# ──────────────────────────────────────────────
+# 量子信息度量
+# ──────────────────────────────────────────────
+
+
+def quantum_fidelity(psi: torch.Tensor, phi: torch.Tensor, dim: int = -1) -> torch.Tensor:
+    """计算两个纯量子态之间的保真度 (Fidelity)。
+
+    保真度是量子信息中衡量两个量子态"相似程度"的核心指标：
+
+        F(|ψ⟩, |φ⟩) = |⟨ψ|φ⟩|²
+
+    取值范围 [0, 1]：
+    - F = 1：两态完全相同（相同方向，可有全局相位差）
+    - F = 0：两态完全正交（完全不同）
+    - 0 < F < 1：部分重叠
+
+    在量子架构中的用途：
+    1. **QEL 监控**：纠缠前后的态保真度，低保真度意味着纠缠操作改变了态
+    2. **QCI 评估**：坍缩前后的保真度，高保真度意味着坍缩代价低
+    3. **KD 损失**：知识蒸馏时对齐教师/学生模型的量子态
+
+    Args:
+        psi: 量子态 (..., d)，复数或实数
+        phi: 量子态 (..., d)，复数或实数
+        dim: 内积维度（状态空间维度）
+    Returns:
+        保真度 (...)，实数，范围 [0, 1]
+
+    Example:
+        >>> psi = torch.tensor([1, 0], dtype=torch.complex64)  # |0⟩
+        >>> phi = torch.tensor([0, 1], dtype=torch.complex64)  # |1⟩
+        >>> quantum_fidelity(psi, phi)  # 0.0（正交态）
+        >>> phi2 = torch.tensor([1, 0], dtype=torch.complex64)  # |0⟩
+        >>> quantum_fidelity(psi, phi2)  # 1.0（相同态）
+    """
+    # 归一化（确保是合法的量子态）
+    psi_norm = normalize_quantum_state(psi, dim=dim)
+    phi_norm = normalize_quantum_state(phi, dim=dim)
+
+    # 内积 ⟨ψ|φ⟩ = Σ conj(ψ_i) * φ_i
+    inner = (psi_norm.conj() * phi_norm).sum(dim=dim)  # (...) 复数
+
+    # 保真度 = |⟨ψ|φ⟩|²
+    fidelity = inner.abs().pow(2)
+    return fidelity.real  # 保真度为实数（虚部数值误差）
+
+
+def trace_distance(psi: torch.Tensor, phi: torch.Tensor, dim: int = -1) -> torch.Tensor:
+    """计算两个纯量子态的迹距离 (Trace Distance)。
+
+    迹距离是量子态区分能力的操作性度量：
+
+        T(|ψ⟩, |φ⟩) = √(1 - F(|ψ⟩, |φ⟩)) = √(1 - |⟨ψ|φ⟩|²)
+
+    与保真度的关系：
+    - T = 0 ↔ F = 1（相同态）
+    - T = 1 ↔ F = 0（正交态，完全可区分）
+
+    迹距离满足三角不等式，是量子态空间上的合法度量（Bures 度量的简化形式）。
+
+    在量子架构中的用途：
+    1. **训练监控**：两层之间量子态的平均迹距离反映信息流动程度
+    2. **正则化**：约束相邻层量子态不过度变化（防止梯度爆炸的语义）
+    3. **早退判据**：迹距离 < ε 时可以安全跳过后续层
+
+    Args:
+        psi: 量子态 (..., d)
+        phi: 量子态 (..., d)
+        dim: 内积维度
+    Returns:
+        迹距离 (...)，实数，范围 [0, 1]
+    """
+    fid = quantum_fidelity(psi, phi, dim=dim)
+    return torch.sqrt((1.0 - fid).clamp(min=0.0))
+
+
+def quantum_relative_entropy(
+    psi: torch.Tensor,
+    phi: torch.Tensor,
+    dim: int = -1,
+    eps: float = 1e-8,
+) -> torch.Tensor:
+    """计算量子相对熵（KL 散度的量子类比）。
+
+    对于由 Born 法则导出的概率分布：
+        p_i = |ψ_i|² / Σ_j |ψ_j|²
+        q_i = |φ_i|² / Σ_j |φ_j|²
+
+    量子相对熵（在 Born 概率分布意义下）：
+        D(p||q) = Σ_i p_i · log(p_i / q_i)
+
+    注意：严格量子相对熵 S(ρ||σ) = Tr(ρ(log ρ - log σ)) 需要密度矩阵，
+    这里使用 Born 概率分布的经典 KL 散度作为近似，适用于纯态情形。
+
+    在 QKD（量子知识蒸馏）和 QSA 对齐损失中可直接替代 KL 散度。
+
+    Args:
+        psi: 量子态（参考分布）(..., d)
+        phi: 量子态（目标分布）(..., d)
+        dim: 状态维度
+        eps: 防止 log(0)
+    Returns:
+        相对熵 (...)，实数，非负
+    """
+    p = born_normalize(psi, dim=dim, eps=eps)  # Born 概率
+    q = born_normalize(phi, dim=dim, eps=eps)
+
+    # KL 散度 D(p||q)
+    log_ratio = torch.log(p.clamp(min=eps)) - torch.log(q.clamp(min=eps))
+    return (p * log_ratio).sum(dim=dim)
