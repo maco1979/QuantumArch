@@ -483,10 +483,14 @@ class QGD(Optimizer):
                 - 'cayley_params': Cayley 参数数量
                 - 'real_params': 实数参数数量
                 - 'grad_norm_complex': 复数参数的梯度 L2 范数（最近一步）
+                - 'grad_norm_real': 实数参数的梯度 L2 范数（最近一步）
+                - 'mod_lr': 当前模长学习率（第一个参数组）
+                - 'phase_lr': 当前相位学习率（第一个参数组）
         """
         global_step = 0
         n_complex = n_cayley = n_real = 0
-        grad_norm_sq = 0.0
+        grad_norm_sq_complex = 0.0
+        grad_norm_sq_real = 0.0
 
         for group in self.param_groups:
             for p in group["params"]:
@@ -503,16 +507,71 @@ class QGD(Optimizer):
                     n_cayley += 1
                 elif is_complex:
                     n_complex += 1
-                    grad_norm_sq += torch.view_as_real(p.grad).float().pow(2).sum().item()
+                    grad_norm_sq_complex += torch.view_as_real(p.grad).float().pow(2).sum().item()
                 else:
                     n_real += 1
+                    grad_norm_sq_real += p.grad.float().pow(2).sum().item()
+
+        # 读取第一个参数组的当前学习率
+        first_group = self.param_groups[0] if self.param_groups else {}
 
         return {
             "global_step": global_step,
             "complex_params": n_complex,
             "cayley_params": n_cayley,
             "real_params": n_real,
-            "grad_norm_complex": float(grad_norm_sq**0.5),
+            "grad_norm_complex": float(grad_norm_sq_complex**0.5),
+            "grad_norm_real": float(grad_norm_sq_real**0.5),
+            "mod_lr": first_group.get("mod_lr", 0.0),
+            "phase_lr": first_group.get("phase_lr", 0.0),
+        }
+
+    def grad_norm_ema(self, alpha: float = 0.99) -> dict:
+        """计算梯度范数的指数移动平均（EMA），用于稳定性监控。
+
+        EMA 平滑可以过滤单步梯度波动，揭示训练趋势：
+        - EMA 持续增大 → 训练可能不稳定，考虑降低学习率
+        - EMA 趋近于零 → 训练收敛，可考虑降低学习率或停止
+
+        使用方法：
+            >>> stats = optimizer.grad_norm_ema()
+            >>> print(f"复数梯度 EMA: {stats['ema_complex']:.4f}")
+
+        Args:
+            alpha: EMA 衰减系数（0.99 表示 100 步窗口）
+        Returns:
+            dict with 'ema_complex', 'ema_real', 'ema_total'
+        """
+        # 从内部 state 获取或初始化 EMA 缓存
+        if not hasattr(self, "_grad_ema"):
+            self._grad_ema = {"ema_complex": 0.0, "ema_real": 0.0, "count": 0}
+
+        stats = self.get_stats()
+        norm_c = stats["grad_norm_complex"]
+        norm_r = stats["grad_norm_real"]
+
+        # EMA 更新（偏差校正版本）
+        self._grad_ema["count"] += 1
+        n = self._grad_ema["count"]
+        effective_alpha = alpha if n > 1 else 0.0  # 第一步无历史，直接赋值
+
+        self._grad_ema["ema_complex"] = (
+            effective_alpha * self._grad_ema["ema_complex"] + (1 - effective_alpha) * norm_c
+        )
+        self._grad_ema["ema_real"] = (
+            effective_alpha * self._grad_ema["ema_real"] + (1 - effective_alpha) * norm_r
+        )
+
+        # 偏差校正
+        bias_corr = 1.0 - alpha**n
+        ema_c = self._grad_ema["ema_complex"] / max(bias_corr, 1e-8)
+        ema_r = self._grad_ema["ema_real"] / max(bias_corr, 1e-8)
+
+        return {
+            "ema_complex": ema_c,
+            "ema_real": ema_r,
+            "ema_total": (ema_c**2 + ema_r**2) ** 0.5,
+            "step_count": n,
         }
 
     @classmethod
@@ -563,6 +622,64 @@ class QGD(Optimizer):
             optimizer.param_groups[0]["names"] = all_names
 
         return optimizer
+
+    def per_group_lr_state(self) -> List[Dict]:
+        """返回每个参数组的学习率状态摘要。
+
+        当使用 ``add_param_group`` 配置多参数组时（例如按层分组，
+        Embedding 层使用小学习率，深层使用大学习率），此方法提供
+        每个参数组的当前 mod_lr / phase_lr 及统计信息，方便
+        独立调度器对不同参数组分别降学习率。
+
+        典型用法：
+            >>> for i, group_state in enumerate(optimizer.per_group_lr_state()):
+            ...     print(f"Group {i}: mod_lr={group_state['mod_lr']:.2e}, "
+            ...           f"params={group_state['num_params']}")
+
+        Returns:
+            list of dict，每个 dict 包含：
+                - ``group_idx``: 参数组索引
+                - ``mod_lr``: 当前模长学习率
+                - ``phase_lr``: 当前相位学习率
+                - ``cayley_lr``: 当前 Cayley 参数学习率
+                - ``real_lr``: 当前实数参数学习率
+                - ``num_params``: 参数组内参数数量
+                - ``num_complex``: 复数参数数量
+                - ``num_cayley``: Cayley 参数数量
+                - ``num_real``: 实数参数数量
+                - ``has_grad``: 是否有任何参数具有梯度（上步是否被更新）
+        """
+        result = []
+        for idx, group in enumerate(self.param_groups):
+            n_complex = n_cayley = n_real = 0
+            has_grad = False
+
+            for p in group["params"]:
+                is_complex = p.dtype in (torch.complex64, torch.complex128)
+                is_cayley = _is_cayley_param(self._get_param_name(p))
+                if p.grad is not None:
+                    has_grad = True
+                if is_cayley:
+                    n_cayley += 1
+                elif is_complex:
+                    n_complex += 1
+                else:
+                    n_real += 1
+
+            result.append({
+                "group_idx": idx,
+                "mod_lr": group.get("mod_lr", 0.0),
+                "phase_lr": group.get("phase_lr", 0.0),
+                "cayley_lr": group.get("cayley_lr", 0.0),
+                "real_lr": group.get("real_lr", 0.0),
+                "num_params": len(group["params"]),
+                "num_complex": n_complex,
+                "num_cayley": n_cayley,
+                "num_real": n_real,
+                "has_grad": has_grad,
+            })
+
+        return result
 
 
 
