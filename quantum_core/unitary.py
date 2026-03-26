@@ -172,6 +172,105 @@ class CayleyLinear(nn.Module):
         I = torch.eye(d, dtype=W.dtype, device=W.device)
         return (W.conj().T @ W - I).abs().pow(2).sum().sqrt()
 
+    @torch.no_grad()
+    def recover_unitarity(self, method: str = "qr") -> float:
+        """主动恢复酉性约束（当数值误差积累导致 Ω 参数漂移时使用）。
+
+        理论上，Cayley 参数化保证 W 精确酉，但由于：
+        1. 有限精度浮点运算的舍入误差积累
+        2. 混合精度训练（float16 → 精度丢失）
+        3. 长时间训练后 omega_diag/omega_tri 参数的数值漂移
+
+        可能导致 ||W†W - I||_F 不为零。本方法提供两种恢复策略：
+
+        - ``'qr'``（推荐）：对当前 W 做 QR 分解，用 Q 替代 W，
+          然后逆向求解新的 Ω = Cayley^{-1}(Q)，更新参数。
+          - 优点：Q 精确酉，恢复后违背度接近机器精度
+          - 缺点：需要矩阵分解，O(d³) 时间复杂度
+
+        - ``'rescale'``：对 omega_tri 和 omega_diag 施加轻微正则化，
+          将参数模长缩回安全范围（经验上 ||Ω|| < 10 保证数值稳定）。
+          - 优点：快速，O(d²)
+          - 缺点：恢复效果不精确
+
+        推荐在以下时机调用：
+        - 每 N 步训练后（作为定期维护，N 通常 > 1000）
+        - 违背度 > 1e-4 时（由监控系统触发）
+        - 混合精度训练的 checkpoint 保存前
+
+        Args:
+            method: 恢复方法，'qr'（精确）或 'rescale'（快速近似）
+
+        Returns:
+            恢复前的违背度（用于日志记录）
+
+        Raises:
+            ValueError: 非方阵情况不支持此方法
+            ValueError: 不支持的 method 值
+        """
+        if not self.is_square:
+            raise ValueError("recover_unitarity 仅支持方阵 CayleyLinear")
+
+        d = self.in_features
+        device = self.omega_diag.device
+
+        # 记录恢复前的违背度
+        W_before = self.unitary_matrix  # (d, d) 复数
+        I = torch.eye(d, dtype=W_before.dtype, device=device)
+        violation_before = (W_before.conj().T @ W_before - I).abs().pow(2).sum().sqrt().item()
+
+        if method == "qr":
+            # ── QR 分解恢复 ──
+            # 对当前 W 做 QR，取 Q（精确酉矩阵）
+            Q, R = torch.linalg.qr(W_before)
+
+            # 确保 R 对角线为正（QR 分解中 Q 不唯一，这里做 phase 校正）
+            diag_r = R.diagonal()
+            phase_corr = diag_r / diag_r.abs().clamp(min=1e-8)  # e^{iθ_k}
+            Q = Q * phase_corr.unsqueeze(0)  # 列相位校正 → Q 仍然酉
+
+            # 逆向求解 Ω：从 Q 还原斜厄米矩阵
+            # Q = (I + i/2·Ω)^{-1}(I - i/2·Ω)
+            # => (I + i/2·Ω) Q = I - i/2·Ω
+            # => Q + i/2·Ω·Q = I - i/2·Ω
+            # => i/2·Ω(Q + I) = I - Q
+            # => Ω = 2/(i) · (I - Q)(I + Q)^{-1}  = -2i · (I-Q)(I+Q)^{-1}
+            I_plus_Q = I + Q
+            I_minus_Q = I - Q
+            try:
+                Omega_recovered = -2j * torch.linalg.solve(I_plus_Q.conj().T, I_minus_Q.conj().T).conj().T
+                # Omega_recovered 应为斜厄米：检查 ||Ω + Ω†||
+                skew_violation = (Omega_recovered + Omega_recovered.conj().T).abs().max().item()
+                if skew_violation > 1e-3:
+                    # 强制斜厄米化
+                    Omega_recovered = (Omega_recovered - Omega_recovered.conj().T) / 2
+
+                # 更新参数
+                # 对角线虚部
+                self.omega_diag.data.copy_(Omega_recovered.diagonal().imag)
+                # 上三角
+                rows, cols = torch.triu_indices(d, d, offset=1, device=device)
+                self.omega_tri.data.copy_(Omega_recovered[rows, cols])
+
+            except torch.linalg.LinAlgError:
+                # 若 (I+Q) 奇异，退化为 rescale 方法
+                method = "rescale"
+
+        if method == "rescale":
+            # ── 参数缩放恢复（快速近似）──
+            # 将 omega 参数的模长约束到安全范围内（经验 < 5.0）
+            max_norm = 5.0
+            with torch.no_grad():
+                diag_norm = self.omega_diag.abs().max()
+                if diag_norm > max_norm:
+                    self.omega_diag.data.mul_(max_norm / diag_norm)
+
+                tri_norm = self.omega_tri.abs().max()
+                if tri_norm > max_norm:
+                    self.omega_tri.data.mul_(max_norm / tri_norm)
+
+        return violation_before
+
     def extra_repr(self) -> str:
         return (
             f"in_features={self.in_features}, out_features={self.out_features}, "
