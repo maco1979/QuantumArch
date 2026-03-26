@@ -228,14 +228,23 @@ class GatedQuantumFFN(nn.Module):
             from .activations import ComplexGELU
 
             self.activation = ComplexGELU()
-        else:
-            raise ValueError(f"Unknown activation: {activation}")
+        elif activation == "swiglu":
+            # ComplexSwiGLU 集成门控和激活于一体，内部通过 gate_proj 产生门控信号
+            # 注意：SwiGLU 自带门控，无需再叠加 QuantumGate，否则双重门控会过度抑制
+            from .activations import ComplexSwiGLU
 
-        # 量子门控层
-        self.gate = QuantumGate(
-            dim=self.ffn_dim,
-            init_std=1.0 / math.sqrt(self.ffn_dim),
-        )
+            self.activation = ComplexSwiGLU(self.ffn_dim, split_input=True)
+        else:
+            raise ValueError(f"Unknown activation: {activation}, 支持: modrelu, gelu, swiglu")
+
+        # 量子门控层（SwiGLU 自带门控，跳过额外 QuantumGate 以避免双重门控）
+        if activation != "swiglu":
+            self.gate = QuantumGate(
+                dim=self.ffn_dim,
+                init_std=1.0 / math.sqrt(self.ffn_dim),
+            )
+        else:
+            self.gate = None  # SwiGLU 内置门控，不需要额外 QuantumGate
 
         # 下投影（方阵时使用 Cayley 酉投影）
         self.W_down = ComplexLinear(
@@ -267,8 +276,9 @@ class GatedQuantumFFN(nn.Module):
         # 复数激活
         up = self.activation(up)
 
-        # 量子门控（复数哈达玛积）
-        up = self.gate(up)
+        # 量子门控（复数哈达玛积）；SwiGLU 自带门控，跳过额外 QuantumGate
+        if self.gate is not None:
+            up = self.gate(up)
 
         # Dropout
         if training and self.dropout_p > 0:
@@ -282,6 +292,60 @@ class GatedQuantumFFN(nn.Module):
 
         # 残差连接
         return residual + down
+
+    @torch.no_grad()
+    def get_gate_statistics(self, x: torch.Tensor) -> dict:
+        """计算门控信号的统计信息，用于诊断和监控门控健康度。
+
+        门控信号 g = ComplexSigmoid(x @ W_gate) ∈ (0,1)+i(0,1)，
+        其模长 |g| ∈ (0, √2)。
+
+        常见异常模式：
+        - **死门（Dead Gate）**：gate_mag_mean < 0.1，门控几乎不激活，
+          说明 W_gate 梯度消失或初始化过大导致大量输入落在 Sigmoid 饱和区。
+        - **开放门（Open Gate）**：gate_mag_mean > 1.3（接近 √2），
+          门控几乎全通，丧失选择性。
+        - **相位失调（Phase Drift）**：gate_phase_std 接近 π，
+          说明门控相位完全随机，没有学到有意义的相位路由。
+
+        仅在有 QuantumGate（即非 SwiGLU 模式）时计算门控统计。
+        SwiGLU 模式下返回空字典（门控统计内置于激活函数中）。
+
+        Args:
+            x: 复数输入 (batch, seq_len, ffn_dim)，即 W_up 激活后的张量
+        Returns:
+            dict 包含:
+                - ``gate_mag_mean``: 门控信号模长的均值（健康范围 0.3~1.0）
+                - ``gate_mag_std``: 门控信号模长的标准差
+                - ``gate_mag_min``: 门控信号模长的最小值
+                - ``gate_mag_max``: 门控信号模长的最大值
+                - ``gate_phase_mean``: 门控信号相位的均值 [弧度]
+                - ``gate_phase_std``: 门控信号相位的标准差 [弧度]
+                - ``gate_real_mean``: 门控实部均值（实数路由分量）
+                - ``gate_imag_mean``: 门控虚部均值（虚数路由分量）
+                - ``dead_gate_ratio``: 模长 < 0.1 的门控比例（死门诊断）
+        """
+        if self.gate is None:
+            # SwiGLU 模式：无独立 QuantumGate
+            return {}
+
+        # 计算门控信号（复数）
+        gate_signal = self.gate.sigmoid(x @ self.gate.W_gate)  # (..., ffn_dim)
+
+        gate_mag = gate_signal.abs()
+        gate_phase = gate_signal.angle()
+
+        return {
+            "gate_mag_mean": gate_mag.mean().item(),
+            "gate_mag_std": gate_mag.std().item(),
+            "gate_mag_min": gate_mag.min().item(),
+            "gate_mag_max": gate_mag.max().item(),
+            "gate_phase_mean": gate_phase.mean().item(),
+            "gate_phase_std": gate_phase.std().item(),
+            "gate_real_mean": gate_signal.real.mean().item(),
+            "gate_imag_mean": gate_signal.imag.mean().item(),
+            "dead_gate_ratio": (gate_mag < 0.1).float().mean().item(),
+        }
 
     def extra_repr(self) -> str:
         return f"dim={self.dim}, ffn_dim={self.ffn_dim}, " f"dropout={self.dropout_p}"
@@ -355,6 +419,10 @@ class QuantumFFN(nn.Module):
                 from .activations import ComplexGELU
 
                 self.activation = ComplexGELU()
+            elif activation == "swiglu":
+                from .activations import ComplexSwiGLU
+
+                self.activation = ComplexSwiGLU(self.ffn_dim, split_input=True)
             else:
                 raise ValueError(f"Unknown activation: {activation}")
 
