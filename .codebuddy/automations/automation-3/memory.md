@@ -1,5 +1,45 @@
 # automation-3 执行历史
 
+## 2026-03-26 08:00 — 第4次执行
+
+**状态**: 完成（10/10次迭代）
+
+**改动摘要**:
+1. **QSA 诊断**: `attention.py` 新增 `get_attention_patterns()` — Born概率/干涉相位/注意力熵/TopK掩码
+2. **QFT 逆变换**: `entanglement.py` 新增 `inverse()` IQFT — 支持编解码器架构
+3. **QCI 阈值改进**: `collapse.py` AdaptiveThreshold tau_high 后期衰减 + `get_threshold_summary()`
+4. **QGD 参数组**: `optimizer.py` 新增 `per_group_lr_state()` — 多参数组LR监控
+5. **FFN 门控监控**: `ffn.py` GatedQuantumFFN 新增 `get_gate_statistics()` — 死门检测
+6. **量子度量集**: 新建 `quantum_metrics.py`（250行）— 9个度量函数 + compute_model_quantum_health
+7. **推理接口**: `model.py` 新增 `inference()` — 自动eval切换+量子健康度诊断
+8. **酉性恢复**: `unitary.py` CayleyLinear 新增 `recover_unitarity()` — QR/rescale双方法
+9. **QCI 理论文档**: 新建 `docs/core/qci_theory.md`（300行）— POVM形式主义+超参数指南
+10. **单元测试**: 新建 `tests/test_march26_iterations.py`（8类46测试）
+
+**报告文件**: `.workbuddy/memory/iteration-report-2026-03-26.md`
+
+---
+
+## 2026-03-25 08:00 — 第3次执行
+
+**状态**: 完成（10/10次迭代）
+
+**改动摘要**:
+1. **QSA 因果掩码**: `attention.py` forward() 新增 `causal` 参数，支持自回归语言模型
+2. **QEL 度量导出**: `entanglement.py` 新增 `get_entanglement_metrics()` — 5个纠缠质量指标
+3. **POVM 正交正则化**: `collapse.py` 新增 `orthogonality_regularization_loss()` + `renormalize_basis()`
+4. **QGD EMA 跟踪**: `optimizer.py` 增强 `get_stats()` + 新增 `grad_norm_ema()` 方法
+5. **量子信息三件套**: `complex_ops.py` 新增 `quantum_fidelity`/`trace_distance`/`quantum_relative_entropy`
+6. **FFN SwiGLU 集成**: `ffn.py` 正式支持 `activation="swiglu"` 选项（双重门控防护）
+7. **QIR 独立模块**: 新建 `interference_router.py`（310行）— pairwise_interference + QuantumInterferenceRouter
+8. **模型参数统计增强**: `model.py` count_parameters() 新增子模块分类+内存估算字段
+9. **QEL 理论文档**: 新建 `docs/core/qel_theory.md`（260行）
+10. **单元测试**: 新建 `tests/test_march25_iterations.py`（8类38测试）
+
+**报告文件**: `.workbuddy/memory/iteration-report-2026-03-25.md`
+
+---
+
 ## 2026-03-23 08:00 — 第1次执行
 
 **状态**: 完成（10/10次迭代）
@@ -17,3 +57,4 @@
 10. **梯度检查点**: QuantumBlock 新增 `use_checkpoint` 支持（节省50%显存）
 
 **报告文件**: `.workbuddy/memory/iteration-report-2026-03-23.md`
+
