@@ -292,6 +292,77 @@ class QuantumSuperpositionAttention(nn.Module):
             raise ValueError(f"topk_ratio 必须在 (0, 1] 内，收到: {ratio}")
         self.topk_ratio = ratio
 
+    @torch.no_grad()
+    def get_attention_patterns(
+        self,
+        x: torch.Tensor,
+        causal: bool = False,
+    ) -> Dict[str, torch.Tensor]:
+        """提取完整的注意力模式，用于可视化与诊断。
+
+        在不更新模型参数的情况下，计算所有头的注意力热图：
+        - Born 概率矩阵（归一化为合法概率分布）
+        - 干涉相位矩阵（量子相位调制结果）
+        - 各头注意力熵（度量注意力集中/分散程度）
+
+        典型使用场景：
+        1. 注意力可视化：观察不同层不同头关注的位置模式
+        2. 稀疏性分析：验证 Top-K 筛选是否过滤了正确的低概率位置
+        3. 相位干涉调试：检测相长/相消干涉是否产生有意义的路由
+
+        Args:
+            x: 复数输入 (batch, seq_len, dim)
+            causal: 是否使用因果掩码（与 forward 一致）
+        Returns:
+            dict 包含:
+                - ``attn_probs``: 注意力概率矩阵 (B, H, N, N)，实数
+                - ``phase_matrix``: 干涉相位矩阵 (B, H, N, N)，实数 [弧度]
+                - ``attn_entropy``: 每个查询的注意力熵 (B, H, N)，实数
+                - ``topk_mask``: Top-K 稀疏掩码 (B, H, N, N)，bool
+                  （True = 被 Top-K 保留，False = 被筛除）
+        """
+        B, N, D = x.shape
+
+        # 复数投影
+        Q = self.Wq(x).view(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+        K = self.Wk(x).view(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # 复数内积 α = ⟨Q|K⟩
+        alpha = torch.einsum("bhnd,bhsd->bhns", Q.conj(), K) * self.scale
+
+        # 干涉相位调制 β = α · e^{i·f(|α|)}
+        alpha_mag = alpha.abs()
+        phase_shift = self.phase_fn(alpha_mag.detach())
+        beta = alpha * torch.exp(1j * phase_shift)
+
+        # 因果掩码（可选）
+        if causal:
+            causal_mask = torch.tril(torch.ones(N, N, device=x.device, dtype=torch.bool))
+            mask_value = torch.finfo(torch.float32).min
+            beta = beta.masked_fill(
+                ~causal_mask.unsqueeze(0).unsqueeze(0),
+                complex(mask_value, 0.0),
+            )
+
+        # Born 概率
+        attn_probs = born_normalize(beta, dim=-1)  # (B, H, N, N)，实数
+
+        # 注意力熵
+        attn_entropy = von_neumann_entropy(attn_probs, dim=-1)  # (B, H, N)
+
+        # Top-K 稀疏掩码（标记哪些位置被 Top-K 筛选保留）
+        k = max(1, int(self.topk_ratio * N))
+        _, topk_indices = torch.topk(attn_probs, k=k, dim=-1)  # (B, H, N, k)
+        topk_mask = torch.zeros(B, self.num_heads, N, N, dtype=torch.bool, device=x.device)
+        topk_mask.scatter_(3, topk_indices, True)  # (B, H, N, N)
+
+        return {
+            "attn_probs": attn_probs,           # (B, H, N, N) 实数概率
+            "phase_matrix": phase_shift,         # (B, H, N, N) 干涉相位
+            "attn_entropy": attn_entropy,         # (B, H, N) 每查询熵
+            "topk_mask": topk_mask,               # (B, H, N, N) bool 稀疏掩码
+        }
+
     def extra_repr(self) -> str:
         return (
             f"dim={self.dim}, num_heads={self.num_heads}, "
