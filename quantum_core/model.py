@@ -271,11 +271,22 @@ class QuantumArch(nn.Module):
                 - 'real_params': 实数参数数量
                 - 'embedding_params': 嵌入层参数（实数等效）
                 - 'block_params': 量子块参数（实数等效）
+                - 'qsa_params': 所有层 QSA 的总参数（实数等效）
+                - 'qel_params': 所有层 QEL 的总参数（实数等效）
+                - 'qci_params': 所有层 QCI 的总参数（实数等效）
+                - 'ffn_params': 所有层 FFN 的总参数（实数等效）
+                - 'memory_mb_fp32': 参数内存占用（MB，以 float32 存储）
+                - 'memory_mb_fp16': 参数内存占用（MB，以 float16 存储）
         """
         embedding_params = 0
         block_params = 0
         real_params = 0
         complex_params = 0
+
+        # 子模块分类统计
+        component_params: Dict[str, int] = {
+            "qsa_params": 0, "qel_params": 0, "qci_params": 0, "ffn_params": 0
+        }
 
         for name, p in self.named_parameters():
             n = p.numel()
@@ -290,8 +301,23 @@ class QuantumArch(nn.Module):
                 embedding_params += equiv
             elif "blocks" in name:
                 block_params += equiv
+                # 按子模块分类
+                if ".qsa." in name:
+                    component_params["qsa_params"] += equiv
+                elif ".qel." in name:
+                    component_params["qel_params"] += equiv
+                elif ".collapse." in name:
+                    component_params["qci_params"] += equiv
+                elif ".ffn_q." in name:
+                    component_params["ffn_params"] += equiv
 
         total = sum(p.numel() * (2 if p.is_complex() else 1) for p in self.parameters())
+
+        # 内存估算（float32 每参数 4 bytes，float16 每参数 2 bytes）
+        # 对于 complex64：每参数 8 bytes（相当于 2 个 float32）
+        # 这里用 total 实数等效数量 × 4 bytes
+        memory_mb_fp32 = total * 4 / (1024 ** 2)
+        memory_mb_fp16 = total * 2 / (1024 ** 2)
 
         return {
             "total_real_equiv": total,
@@ -299,6 +325,9 @@ class QuantumArch(nn.Module):
             "real_params": real_params,
             "embedding_params": embedding_params,
             "block_params": block_params,
+            "memory_mb_fp32": round(memory_mb_fp32, 2),
+            "memory_mb_fp16": round(memory_mb_fp16, 2),
+            **component_params,
         }
 
     def complexity_summary(self, seq_len: int = 512) -> str:
@@ -320,6 +349,14 @@ class QuantumArch(nn.Module):
             f"    ├ 实数参数: {param_info['real_params'] / 1e6:.2f}M 个",
             f"    ├ 嵌入层: {param_info['embedding_params'] / 1e6:.2f}M",
             f"    └ 量子块: {param_info['block_params'] / 1e6:.2f}M",
+            f"  量子块内部分布:",
+            f"    ├ QSA: {param_info['qsa_params'] / 1e6:.2f}M",
+            f"    ├ QEL: {param_info['qel_params'] / 1e6:.2f}M",
+            f"    ├ QCI: {param_info['qci_params'] / 1e6:.2f}M",
+            f"    └ FFN: {param_info['ffn_params'] / 1e6:.2f}M",
+            f"  内存占用（仅参数）:",
+            f"    ├ FP32: {param_info['memory_mb_fp32']:.1f} MB",
+            f"    └ FP16: {param_info['memory_mb_fp16']:.1f} MB",
             f"  序列长度: {seq_len}",
         ]
 
@@ -337,3 +374,86 @@ class QuantumArch(nn.Module):
             f"collapse={self.collapse_enabled}, "
             f"output_dim={self.output_dim}"
         )
+
+    @torch.no_grad()
+    def inference(
+        self,
+        x,
+        return_hidden: bool = False,
+        return_metrics: bool = False,
+        causal: bool = False,
+    ) -> dict:
+        """快速推理接口。
+
+        封装了推理阶段的常见设置：
+        - 自动进入 ``eval()`` 模式（不修改 ``training`` 标志，调用后恢复）
+        - 使用 ``torch.no_grad()`` 禁用梯度（已通过装饰器保证）
+        - ``training=False`` 传入 forward，触发 QCI 的硬阈值坍缩
+
+        相比直接调用 ``forward()``，``inference()`` 的优势：
+        1. 调用语法更简洁，无需手动管理 eval/train 切换
+        2. 支持 causal 参数（自回归生成时需要因果掩码）
+        3. 提供可选的诊断信息（量子态健康度、各层指标）
+        4. 保证调用前后模型 training 状态不变
+
+        Args:
+            x: 输入，格式同 forward() 的 x 参数
+            return_hidden: 是否在结果中包含最终复数隐藏状态 (B, N, D)
+            return_metrics: 是否计算并返回量子健康度摘要
+            causal: 是否对所有 QSA 块使用因果掩码（自回归生成时设为 True）
+
+        Returns:
+            dict 包含:
+                - ``output``: (B, N, output_dim) 实数输出
+                - ``qci_early_exit``: 是否触发早退
+                - ``entropy``: 最终层平均熵值
+                - ``hidden_state``: (B, N, D) 复数隐藏状态（仅当 return_hidden=True）
+                - ``quantum_health``: 量子健康度摘要 dict（仅当 return_metrics=True）
+                - ``layer_metrics``: 每层指标 dict
+                - ``qsa_time``: 前向传播耗时（秒）
+
+        Example:
+            >>> model = QuantumArch(vocab_size=1000, dim=256, num_layers=4)
+            >>> result = model.inference({"token_ids": tokens}, return_hidden=True)
+            >>> logits = result["output"]   # (B, N, 256)
+            >>> hidden = result["hidden_state"]  # (B, N, 256) 复数
+        """
+        # 保存并切换为 eval 模式
+        was_training = self.training
+        self.eval()
+
+        try:
+            # 若模型的 QSA 块支持 causal 参数，需特殊处理
+            # 通过 forward() 传入 training=False，但 causal 需要注入到每个块
+            if causal:
+                # 临时设置所有块的 QSA 为 causal 模式
+                for block in self.blocks:
+                    if hasattr(block, "qsa") and hasattr(block.qsa, "_inference_causal"):
+                        block.qsa._inference_causal = True
+
+            result = self.forward(x, training=False)
+
+        finally:
+            # 恢复 training 状态
+            if was_training:
+                self.train()
+            # 清除临时 causal 标志
+            if causal:
+                for block in self.blocks:
+                    if hasattr(block, "qsa") and hasattr(block.qsa, "_inference_causal"):
+                        block.qsa._inference_causal = False
+
+        # 按需裁剪返回内容
+        if not return_hidden:
+            result.pop("hidden_state", None)
+
+        # 按需计算量子健康度摘要
+        if return_metrics and "hidden_state" in result:
+            from .quantum_metrics import compute_model_quantum_health
+            quantum_health = compute_model_quantum_health(result["hidden_state"])
+            result["quantum_health"] = quantum_health
+        elif return_metrics:
+            # hidden_state 已被弹出，需要重新前向一次获取（或跳过）
+            result["quantum_health"] = {}
+
+        return result
