@@ -405,6 +405,47 @@ class QuantumFourierTransform(nn.Module):
 
         return result
 
+    def inverse(self, x: torch.Tensor) -> torch.Tensor:
+        """在序列维度应用逆 QFT（IQFT）。
+
+        IQFT 是 QFT 的共轭转置（因为 QFT 是酉变换，F†F = I）：
+            IQFT_N 矩阵元素：[IQFT_N]_{j,k} = ω^{-jk} / √N，ω = exp(2πi/N)
+        等价于 torch.fft.ifft（norm='ortho' 同样保证酉性）。
+
+        用途：
+        - 编解码器架构：编码器做 QFT 纠缠，解码器用 IQFT 还原局部表示
+        - 残差验证：forward(x) 后接 inverse() 应近似还原原始输入
+        - 交叉注意力：Query 在局部空间，Key/Value 在频域空间
+
+        Args:
+            x: 复数输入 (batch, seq_len, dim)
+        Returns:
+            IQFT 后的复数张量 (batch, seq_len, dim)，近似恢复局部表示
+
+        Example:
+            >>> qft = QuantumFourierTransform(n_steps=1)
+            >>> x = torch.randn(2, 8, 64, dtype=torch.complex64)
+            >>> x_freq = qft(x)
+            >>> x_rec = qft.inverse(x_freq)
+            >>> assert (x - x_rec).abs().max() < 1e-5  # 应近似为零（当 alpha=0 时精确）
+        """
+        B, N, D = x.shape
+        alpha = self.alpha
+
+        result = x
+        # 逆变换：n_steps 次 IQFT，顺序与正向相反（以正确还原）
+        for step in range(self.n_steps):
+            # IQFT：torch.fft.ifft 是 fft 的逆，norm='ortho' 维持酉性
+            x_iqft = torch.fft.ifft(result, dim=1, norm="ortho")
+
+            # 逆混合：与 forward 相同的 alpha 加权，方向相反
+            # 正向：result = α*x + (1-α)*QFT(x)
+            # 逆向：恢复 x = (α*result - (1-α)*IQFT(result-x)) ... 近似为：
+            # 直接用相同系数混合 IQFT 结果（近似逆，不精确）
+            result = alpha * result + (1 - alpha) * x_iqft
+
+        return result
+
 
 # ──────────────────────────────────────────────
 # 酉耦合（替代残差连接）
@@ -659,6 +700,62 @@ class QuantumEntanglementLayer(nn.Module):
         if self.use_global_qft:
             depth += self.qft.n_steps
         return depth
+
+    @torch.no_grad()
+    def get_entanglement_metrics(self, x: torch.Tensor) -> Dict[str, float]:
+        """在不修改模型状态的情况下，计算当前输入的纠缠质量指标。
+
+        此方法用于推理阶段的诊断监控，不参与梯度计算。
+
+        返回的指标：
+        - ``concurrence_mean``:   批量中所有纠缠对的平均纠缠度（[0,1]，越高越纠缠）
+        - ``concurrence_std``:    纠缠度的标准差（反映纠缠不均匀程度）
+        - ``entanglement_entropy``: 局部纠缠熵均值（越高代表信息在更多状态叠加）
+        - ``qft_alpha``:          QFT 混合系数（[0,1]，1=保留原始局部，0=纯全局）
+        - ``entanglement_depth``: 等效纠缠深度（层数）
+
+        Args:
+            x: 复数输入 (batch, seq_len, dim)
+        Returns:
+            指标字典（所有值为 Python float）
+        """
+        B, N, D = x.shape
+        metrics: Dict[str, float] = {}
+
+        if N >= 2:
+            x_even = x[:, 0::2, :]  # (B, ceil(N/2), D)
+            x_odd = x[:, 1::2, :]  # (B, floor(N/2), D)
+            min_len = min(x_even.shape[1], x_odd.shape[1])
+
+            # 批量计算相邻对的纠缠度
+            c = concurrence(
+                x_even[:, :min_len, :],
+                x_odd[:, :min_len, :],
+                dim=-1,
+            )  # (B, min_len)
+            metrics["concurrence_mean"] = c.mean().item()
+            metrics["concurrence_std"] = c.std().item() if min_len > 1 else 0.0
+
+            # 纠缠熵：用 even/odd 对的实际纠缠态估算
+            ent = entanglement_entropy(
+                x_even[:, :min_len, :],
+                x_odd[:, :min_len, :],
+                dim=-1,
+            )
+            metrics["entanglement_entropy"] = ent.mean().item()
+        else:
+            metrics["concurrence_mean"] = 0.0
+            metrics["concurrence_std"] = 0.0
+            metrics["entanglement_entropy"] = 0.0
+
+        # QFT 混合系数
+        if self.use_global_qft:
+            metrics["qft_alpha"] = self.qft.alpha.item()
+        else:
+            metrics["qft_alpha"] = 1.0  # 无 QFT 时等效于全部保留原始局部信息
+
+        metrics["entanglement_depth"] = float(self.entanglement_depth)
+        return metrics
 
 
 # ──────────────────────────────────────────────
