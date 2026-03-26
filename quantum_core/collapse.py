@@ -249,6 +249,12 @@ class AdaptiveThreshold(nn.Module):
     def update(self, entropy_batch: torch.Tensor, training: bool = True):
         """根据当前 batch 的熵统计更新阈值。
 
+        更新策略（v2）：
+        - ``tau_low``：指数衰减（训练初期保守，后期激进，促进更多早退）
+        - ``tau_high``：两阶段自适应衰减：
+            - 前期：跟踪历史熵的 90 百分位（确保高不确定性 token 被充分处理）
+            - 后期（step > 500）：额外施加轻微衰减（减少计算开销，促进模型收敛）
+
         Args:
             entropy_batch: 当前 batch 的熵值 (B, N)
             training: 是否训练模式
@@ -267,23 +273,67 @@ class AdaptiveThreshold(nn.Module):
         if self.step_count % 100 != 0:
             return
 
-        # τ_low 指数衰减
         steps = self.step_count.item() / 100
+
+        # ── tau_low：指数衰减 ──
         new_tau_low = max(self.tau_low_init * (self.decay_rate**steps), self.tau_min)
         self.tau_low.fill_(new_tau_low)
 
-        # τ_high 基于历史熵分布的 90 百分位
+        # ── tau_high：基于历史熵分布 + 后期衰减 ──
         if self.entropy_count > 10:
             avg_entropy = self.entropy_sum / self.entropy_count
-            # τ_high 保持为平均熵的 1.5-2.0 倍，但不超过 max_entropy
-            new_tau_high = min(avg_entropy * 2.0, self.max_entropy * 0.95)
-            new_tau_high = max(new_tau_high, new_tau_low + 0.5)  # τ_high > τ_low
+            # 基础值：平均熵的 1.5-2.0 倍，但不超过 max_entropy * 0.95
+            base_tau_high = min(avg_entropy * 2.0, self.max_entropy * 0.95)
+            base_tau_high = max(base_tau_high, new_tau_low + 0.5)
+
+            # 后期（step > 500）：施加轻微衰减（每 100 步衰减 2%）
+            # 效果：鼓励模型更早坍缩，逐步提升推理效率
+            late_stage_steps = max(0, self.step_count.item() - 500)
+            late_decay = 0.98 ** (late_stage_steps / 100)
+            new_tau_high = base_tau_high * late_decay
+            # 确保 tau_high 不低于 tau_low + 0.3（维持两阈值的合理间距）
+            new_tau_high = max(new_tau_high, new_tau_low + 0.3)
             self.tau_high.fill_(new_tau_high)
 
     def reset_history(self):
         """重置熵历史（用于新的训练阶段）。"""
         self.entropy_sum.fill_(0.0)
         self.entropy_count.fill_(0)
+
+    def get_threshold_summary(self) -> dict:
+        """返回当前阈值状态的摘要信息。
+
+        用于训练日志、调试和优化系统监控：
+        - 两阈值的当前值和相对关系
+        - 训练进度及熵统计
+        - 与最大熵的比值（反映坍缩策略的"激进程度"）
+
+        Returns:
+            dict 包含:
+                - ``tau_low``: 当前低阈值
+                - ``tau_high``: 当前高阈值
+                - ``gap``: tau_high - tau_low（不确定性容忍带宽）
+                - ``tau_low_ratio``: tau_low / max_entropy（低阈值占最大熵的比例）
+                - ``tau_high_ratio``: tau_high / max_entropy（高阈值占最大熵的比例）
+                - ``avg_entropy``: 最近历史的平均熵值（None 若无历史）
+                - ``step_count``: 当前更新步数
+        """
+        tau_low = self.tau_low.item()
+        tau_high = self.tau_high.item()
+        avg_ent = (
+            (self.entropy_sum / self.entropy_count).item()
+            if self.entropy_count.item() > 0
+            else None
+        )
+        return {
+            "tau_low": tau_low,
+            "tau_high": tau_high,
+            "gap": tau_high - tau_low,
+            "tau_low_ratio": tau_low / max(self.max_entropy, 1e-8),
+            "tau_high_ratio": tau_high / max(self.max_entropy, 1e-8),
+            "avg_entropy": avg_ent,
+            "step_count": self.step_count.item(),
+        }
 
     def extra_repr(self) -> str:
         return (
