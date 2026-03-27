@@ -271,11 +271,99 @@ class CayleyLinear(nn.Module):
 
         return violation_before
 
+    def condition_number(self) -> float:
+        """计算当前酉矩阵 W 的条件数（Condition Number）。
+
+        对于理想的酉矩阵，所有奇异值均为 1，条件数 = σ_max / σ_min = 1。
+        条件数偏离 1 的程度反映了数值退化程度。
+
+        诊断指南：
+        - condition_number ≈ 1.0：酉性良好，正常状态
+        - 1.0 < κ < 10：轻微退化，可通过 recover_unitarity('rescale') 修复
+        - κ > 100：严重退化，建议调用 recover_unitarity('qr') 恢复
+
+        Returns:
+            条件数（float），理想值为 1.0
+
+        Raises:
+            RuntimeError: 非方阵情况下不支持
+        """
+        if not self.is_square:
+            raise RuntimeError("condition_number 仅在方阵 CayleyLinear 上有定义")
+        W = self.unitary_matrix  # (d, d) 复数，不追踪梯度
+        # 奇异值分解（仅需奇异值）
+        s = torch.linalg.svdvals(W)  # (d,) 实数，降序排列
+        sigma_max = s.max().item()
+        sigma_min = s.min().clamp(min=1e-10).item()
+        return sigma_max / sigma_min
+
+    def omega_spectrum(self) -> dict:
+        """分析斜厄米参数矩阵 Ω 的谱（特征值分布）。
+
+        斜厄米矩阵 Ω 的特征值均为纯虚数 iλ_k（λ_k ∈ ℝ）。
+        由 Cayley 变换，W 的特征值为 μ_k = (1-iλ_k/2)/(1+iλ_k/2) ∈ 单位圆上。
+
+        Ω 的谱分析揭示：
+        1. |λ_k| 分布：参数在希尔伯特空间中的"旋转角度"分布
+        2. 接近奇点的参数：|λ_k| > 4 时 Cayley 变换可能不稳定
+        3. 参数利用率：有效参数数量（|λ_k| > ε 的比例）
+
+        Returns:
+            dict 包含:
+                - ``lambda_max``: |λ_k| 的最大值（稳定性指标，应 < 4）
+                - ``lambda_mean``: |λ_k| 的均值（参数活跃度）
+                - ``near_singularity_count``: |λ_k| > 4 的参数数量
+                - ``effective_param_ratio``: |λ_k| > 0.01 的比例（参数利用率）
+                - ``w_phase_uniformity``: W 特征值相位均匀性指数 ∈ [0,1]
+
+        Raises:
+            RuntimeError: 非方阵情况不支持
+        """
+        if not self.is_square:
+            raise RuntimeError("omega_spectrum 仅在方阵 CayleyLinear 上有定义")
+
+        with torch.no_grad():
+            Omega = self._get_skew_hermitian()  # (d, d) 斜厄米
+
+            # 斜厄米矩阵 Ω = -Ω†，所以 iΩ 为 Hermitian（iΩ = -(iΩ)†）
+            # eigvalsh 对 Hermitian 矩阵返回实数特征值
+            try:
+                # 1j * Omega 是 Hermitian（因为 Omega 是斜厄米）
+                # (1j * Ω)† = -1j * Ω† = -1j * (-Ω) = 1j * Ω ✓
+                hermitian_op = 1j * Omega
+                lambda_vals = torch.linalg.eigvalsh(hermitian_op)  # (d,) 实数
+            except RuntimeError:
+                lambda_vals = torch.linalg.eigvals(Omega).imag
+
+            lambda_abs = lambda_vals.abs()
+            lambda_max = lambda_abs.max().item()
+            lambda_mean = lambda_abs.mean().item()
+            near_singularity_count = int((lambda_abs > 4.0).sum().item())
+            effective_param_ratio = (lambda_abs > 0.01).float().mean().item()
+
+            # W 特征值的相位均匀性
+            W = self.unitary_matrix
+            w_eigenvalues = torch.linalg.eigvals(W)
+            w_phases = w_eigenvalues.angle()
+            # 均匀性 = 1 - |E[e^{iφ}]|（均匀分布 → 期望模长 ≈ 0 → 均匀性高）
+            mean_phasor = torch.exp(1j * w_phases).mean()
+            w_phase_uniformity = float((1.0 - mean_phasor.abs()).clamp(0, 1).item())
+
+        return {
+            "lambda_max": lambda_max,
+            "lambda_mean": lambda_mean,
+            "near_singularity_count": near_singularity_count,
+            "effective_param_ratio": effective_param_ratio,
+            "w_phase_uniformity": w_phase_uniformity,
+        }
+
     def extra_repr(self) -> str:
         return (
             f"in_features={self.in_features}, out_features={self.out_features}, "
             f"square={self.is_square}, init_scale={self.init_scale}"
         )
+
+
 
 
 class CayleyLinearSimple(nn.Module):
