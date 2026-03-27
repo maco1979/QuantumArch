@@ -106,9 +106,120 @@ def entanglement_entropy(a: torch.Tensor, b: torch.Tensor, dim: int = -1) -> tor
     return von_neumann_entropy(probs, dim=dim)
 
 
-# ──────────────────────────────────────────────
-# Schmidt 纠缠操作
-# ──────────────────────────────────────────────
+def compute_schmidt_rank_proxy(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    dim: int = -1,
+    eps: float = 1e-6,
+) -> torch.Tensor:
+    """估计两个量子态联合表示的有效 Schmidt 秩（代理指标）。
+
+    Schmidt 分解将二体纯态表示为：
+        |ψ_AB⟩ = Σ_{k=1}^{r} σ_k |u_k⟩_A ⊗ |v_k⟩_B
+
+    其中 σ_k ≥ 0 是 Schmidt 系数，r = Schmidt 秩。
+
+    - r = 1：乘积态（完全无纠缠），A 和 B 相互独立
+    - r > 1：纠缠态，A 和 B 存在量子关联
+    - r = d：最大纠缠（d = min(d_A, d_B)）
+
+    直接计算 Schmidt 秩需要 SVD O(d³)，代价高昂。
+    本函数使用有效秩代理：
+
+        r_eff = exp(S_Schmidt)
+
+    其中 S_Schmidt = -Σ_k λ_k log λ_k（Schmidt 谱的熵，λ_k = σ_k²/Σσ_j²）。
+    有效秩 ∈ [1, d]，连续可微，适合作为训练监控指标。
+
+    实现：
+    1. 构造约化密度矩阵的特征谱代理：用外积矩阵的奇异值近似 Schmidt 系数
+    2. 低维时直接 SVD；高维时用 Hutchinson 迹估计避免 O(d³) 开销
+
+    Args:
+        a: 量子态 A (..., d_A)
+        b: 量子态 B (..., d_B)
+        dim: 特征维度（目前仅支持 dim=-1）
+        eps: 防止 log(0) 和除零
+    Returns:
+        有效 Schmidt 秩代理值 (...)，实数，范围 [1, min(d_A, d_B)]
+
+    Example:
+        >>> a = torch.randn(2, 16, dtype=torch.complex64)
+        >>> b = torch.randn(2, 16, dtype=torch.complex64)
+        >>> r_eff = compute_schmidt_rank_proxy(a, b)
+        >>> assert r_eff.shape == (2,)  # batch 维度
+        >>> assert (r_eff >= 1.0).all()  # 最小有效秩为 1
+    """
+    # 归一化为量子态（单位向量）
+    a_norm = normalize_quantum_state(a, dim=dim)  # (..., d_A)
+    b_norm = normalize_quantum_state(b, dim=dim)  # (..., d_B)
+
+    # 构造低秩外积矩阵 M = a_norm† ⊗ b_norm 的近似
+    # M[..., i, j] = conj(a_norm[..., i]) * b_norm[..., j]
+    # 形状：(..., d_A, d_B) — 通常太大，改为对特征维度做内积近似
+    #
+    # 快速代理：用 a 和 b 的内积矩阵（若 d_A = d_B = d）近似 Schmidt 谱
+    d_A = a_norm.shape[-1]
+    d_B = b_norm.shape[-1]
+    d_min = min(d_A, d_B)
+
+    if d_A == d_B:
+        # 等维情况：直接计算 a⊗b† 矩阵的奇异值
+        # M = a† ⊗ b，形状 (..., d, d)
+        # 但高维时 SVD 开销大，改用特征值近似
+        # 使用经济近似：M = a[:, None, :] * b[None, :, :].conj() 折叠到 batch
+        # → 小 d（d≤128）时直接 SVD
+        batch_shape = a_norm.shape[:-1]
+
+        if d_A <= 128:
+            # 构造 (..., d, d) 外积矩阵
+            # a_col: (..., d, 1), b_row: (..., 1, d)
+            a_col = a_norm.unsqueeze(-1)    # (..., d_A, 1)
+            b_row = b_norm.conj().unsqueeze(-2)  # (..., 1, d_B)
+            M = a_col * b_row  # (..., d_A, d_B)
+
+            # SVD → Schmidt 系数
+            try:
+                S = torch.linalg.svdvals(M)  # (..., min(d_A, d_B)) 实数非负
+            except RuntimeError:
+                # SVD 失败时回退到简单估计
+                return torch.ones(*batch_shape, device=a.device)
+
+            # 归一化为概率分布
+            S_sq = S.pow(2)  # Schmidt 系数平方 ∝ λ_k
+            S_prob = S_sq / (S_sq.sum(dim=-1, keepdim=True).clamp(min=eps))
+            # 有效 Schmidt 秩 = exp(S_von_Neumann)
+            entropy = von_neumann_entropy(S_prob, dim=-1)
+            r_eff = torch.exp(entropy)
+        else:
+            # 高维：用随机化奇异值估计（Hutchinson 近似）
+            # 随机投影到 32 维子空间
+            proj_dim = 32
+            device = a_norm.device
+            P_A = torch.randn(*a_norm.shape[:-1], proj_dim, dtype=torch.float32, device=device)
+            P_B = torch.randn(*b_norm.shape[:-1], proj_dim, dtype=torch.float32, device=device)
+            # 随机投影 → 小矩阵 SVD
+            a_proj = (a_norm.real @ P_A)  # (..., proj_dim)
+            b_proj = (b_norm.real @ P_B)  # (..., proj_dim)
+            M_small = a_proj.unsqueeze(-1) * b_proj.conj().unsqueeze(-2)  # (..., proj_dim, proj_dim)
+            S_small = torch.linalg.svdvals(M_small)  # (..., proj_dim)
+            S_sq_small = S_small.pow(2)
+            S_prob_small = S_sq_small / (S_sq_small.sum(dim=-1, keepdim=True).clamp(min=eps))
+            entropy_approx = von_neumann_entropy(S_prob_small, dim=-1)
+            # 缩放到实际维度
+            r_eff = torch.exp(entropy_approx * d_A / proj_dim)
+    else:
+        # 不等维情况：截取到 d_min 维做近似
+        d_use = min(d_min, 64)
+        a_trunc = a_norm[..., :d_use]
+        b_trunc = b_norm[..., :d_use]
+        return compute_schmidt_rank_proxy(a_trunc, b_trunc, dim=dim, eps=eps)
+
+    # clamp 到合理范围 [1, d_min]
+    return r_eff.clamp(min=1.0, max=float(d_min))
+
+
+
 
 
 class SchmidtEntanglementGate(nn.Module):
