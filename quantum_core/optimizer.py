@@ -574,6 +574,142 @@ class QGD(Optimizer):
             "step_count": n,
         }
 
+    def learning_rate_sensitivity_report(self) -> Dict:
+        """生成学习率敏感性报告，诊断各参数组的更新幅度是否合理。
+
+        对于量子架构，不同类型的参数对学习率的敏感性有显著差异：
+        - **复数参数（Wirtinger 模式）**：模长和相位应分别检查
+          - 模长更新过大（> 0.1*|z|）→ 可能导致量子态坍缩
+          - 相位更新过大（> π）→ 相位绕圈，训练不稳定
+        - **Cayley 参数**：酉性由 Cayley 变换保护，学习率可稍大
+        - **实数参数**：与标准 Adam 相同，参照 Adam 最佳实践
+
+        本报告比较"参数当前值"和"当前步更新量"的比值，
+        生成各参数组的敏感性诊断和调优建议。
+
+        计算方法：
+        对每个参数 p，估计等效更新步长（归一化到参数模长）：
+            sensitivity = ||Δp|| / (||p|| + ε)
+
+        敏感性诊断区间：
+        - sensitivity < 1e-5：学习率可能过低，参数几乎不更新
+        - 1e-5 ≤ sensitivity ≤ 1e-2：合理范围
+        - sensitivity > 1e-2：学习率可能过高，存在不稳定风险
+
+        Returns:
+            dict 包含:
+                - ``group_reports``: list of dict，每组包含：
+                    - ``group_idx``: 参数组索引
+                    - ``mod_lr``, ``phase_lr``: 当前学习率
+                    - ``avg_sensitivity_complex``: 复数参数平均敏感性
+                    - ``avg_sensitivity_real``: 实数参数平均敏感性
+                    - ``sensitivity_status``: 'ok', 'too_low', 'too_high'
+                    - ``recommendation``: 调优建议字符串
+                - ``global_status``: 全局状态摘要
+
+        Example:
+            >>> report = optimizer.learning_rate_sensitivity_report()
+            >>> for g in report['group_reports']:
+            ...     print(f"Group {g['group_idx']}: {g['recommendation']}")
+        """
+        group_reports = []
+        any_too_high = False
+        any_too_low = False
+
+        for idx, group in enumerate(self.param_groups):
+            mod_lr = group.get("mod_lr", 0.0)
+            phase_lr = group.get("phase_lr", 0.0)
+
+            sensitivities_complex = []
+            sensitivities_real = []
+
+            for p in group["params"]:
+                if p.grad is None or p.numel() == 0:
+                    continue
+
+                state = self.state.get(p, {})
+                is_complex = p.dtype in (torch.complex64, torch.complex128)
+                is_cayley = _is_cayley_param(self._get_param_name(p))
+
+                if is_complex and not is_cayley:
+                    # 复数参数：估计 Wirtinger 更新幅度
+                    # 使用 Adam 一阶矩估计的模长作为更新量代理
+                    m = state.get("exp_avg", None)
+                    v = state.get("exp_avg_sq", None)
+                    t = state.get("step", 1)
+
+                    if m is not None and v is not None and t > 0:
+                        bias_corr1 = 1 - 0.9 ** t
+                        bias_corr2 = 1 - 0.999 ** t
+                        # 模长更新量估计
+                        m_hat = m / bias_corr1
+                        v_hat = v / bias_corr2
+                        update_est = (m_hat.abs() / (v_hat.sqrt() + 1e-8)).mean().item()
+                        param_norm = p.abs().mean().item() + 1e-8
+                        sensitivity = mod_lr * update_est / param_norm
+                        sensitivities_complex.append(sensitivity)
+
+                elif not is_complex:
+                    # 实数参数
+                    m = state.get("exp_avg", None)
+                    v = state.get("exp_avg_sq", None)
+                    t = state.get("step", 1)
+
+                    if m is not None and v is not None and t > 0:
+                        bias_corr1 = 1 - 0.9 ** t
+                        bias_corr2 = 1 - 0.999 ** t
+                        m_hat = m / bias_corr1
+                        v_hat = v / bias_corr2
+                        update_est = (m_hat.abs() / (v_hat.sqrt() + 1e-8)).mean().item()
+                        param_norm = p.abs().mean().item() + 1e-8
+                        lr = group.get("real_lr", mod_lr)
+                        sensitivity = lr * update_est / param_norm
+                        sensitivities_real.append(sensitivity)
+
+            avg_sens_complex = float(
+                sum(sensitivities_complex) / len(sensitivities_complex)
+            ) if sensitivities_complex else 0.0
+            avg_sens_real = float(
+                sum(sensitivities_real) / len(sensitivities_real)
+            ) if sensitivities_real else 0.0
+
+            # 诊断状态
+            max_sens = max(avg_sens_complex, avg_sens_real)
+            if max_sens < 1e-6:
+                status = "too_low"
+                recommendation = f"学习率偏低（敏感性={max_sens:.2e}），建议将 mod_lr 提高 5-10×"
+                any_too_low = True
+            elif max_sens > 5e-2:
+                status = "too_high"
+                recommendation = f"学习率偏高（敏感性={max_sens:.2e}），建议将 mod_lr 降低 2-5×"
+                any_too_high = True
+            else:
+                status = "ok"
+                recommendation = f"学习率合理（敏感性={max_sens:.2e}），无需调整"
+
+            group_reports.append({
+                "group_idx": idx,
+                "mod_lr": mod_lr,
+                "phase_lr": phase_lr,
+                "avg_sensitivity_complex": avg_sens_complex,
+                "avg_sensitivity_real": avg_sens_real,
+                "sensitivity_status": status,
+                "recommendation": recommendation,
+            })
+
+        # 全局状态
+        if any_too_high:
+            global_status = "WARNING: 存在学习率过高的参数组，训练可能不稳定"
+        elif any_too_low:
+            global_status = "INFO: 存在学习率过低的参数组，收敛速度可能偏慢"
+        else:
+            global_status = "OK: 所有参数组的学习率在合理范围内"
+
+        return {
+            "group_reports": group_reports,
+            "global_status": global_status,
+        }
+
     @classmethod
     def from_model(
         cls,
