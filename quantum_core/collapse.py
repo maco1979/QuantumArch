@@ -538,6 +538,102 @@ class QuantumCollapseInference(nn.Module):
 
         return output, metrics
 
+    @torch.no_grad()
+    def compute_collapse_efficiency(
+        self,
+        x: torch.Tensor,
+    ) -> Dict[str, float]:
+        """计算 QCI 模块的坍缩效率综合指标。
+
+        坍缩效率衡量 POVM 测量操作的"信息保留质量"：
+        一个好的坍缩应当在尽量减少后续计算的同时，
+        保留尽可能多的原始量子态信息。
+
+        综合指标包括：
+        1. **早退率（early_exit_rate）**：当前输入中可以提前坍缩的 token 比例
+           - 高早退率 → 大量 token 已经"确定"，节省后续计算
+           - 期望范围：训练收敛后 0.4~0.8
+
+        2. **信息保留率（information_retention）**：坍缩前后量子态保真度均值
+           - F(|ψ⟩, |ψ_collapsed⟩) ∈ [0, 1]，越高越好
+           - 低保真度意味着坍缩操作损失了大量信息
+
+        3. **熵压缩比（entropy_compression_ratio）**：坍缩后熵 / 坍缩前熵
+           - 期望值 < 1（坍缩应降低不确定性）
+           - 等于 1 → 坍缩无效，等于 0 → 完全确定化
+
+        4. **POVM 质量（povm_completeness_violation）**：POVM 完整性约束违背度
+           - 理想值接近 0，过大则 POVM 测量概率不规范
+
+        5. **有效测量数（effective_measurement_rank）**：POVM 的有效秩
+           - 通过权重熵估计，反映 POVM 使用了多少"有效测量结果"
+
+        Args:
+            x: 复数输入 (batch, seq_len, dim)
+        Returns:
+            dict 包含上述所有效率指标（Python float）
+
+        Example:
+            >>> qci = QuantumCollapseInference(dim=256)
+            >>> x = torch.randn(2, 32, 256, dtype=torch.complex64)
+            >>> eff = qci.compute_collapse_efficiency(x)
+            >>> print(f"早退率: {eff['early_exit_rate']:.2%}")
+        """
+        from .complex_ops import quantum_fidelity
+
+        B, N, D = x.shape
+
+        # ── 1. 早退率 ──
+        entropy = self.compute_uncertainty(x)  # (B, N)
+        tau_low = self.tau_low_val
+        early_exit_mask = entropy < tau_low   # (B, N) bool
+        early_exit_rate = early_exit_mask.float().mean().item()
+
+        # ── 2. 信息保留率（坍缩前后的量子态保真度）──
+        # 仅对需要坍缩的 token 计算保真度
+        collapsed_state, _ = self.povm(x)  # (B, N, D)
+        if self.collapse_dim != D:
+            collapsed_state = torch.nn.functional.pad(collapsed_state, (0, D - self.collapse_dim))
+
+        # 保真度：F(|ψ⟩, |ψ_collapsed⟩)
+        fidelity = quantum_fidelity(x, collapsed_state, dim=-1)  # (B, N) 实数
+        # 对需要坍缩的位置取均值（若没有，取全部）
+        if early_exit_mask.any():
+            information_retention = fidelity[early_exit_mask].mean().item()
+        else:
+            information_retention = fidelity.mean().item()
+
+        # ── 3. 熵压缩比 ──
+        entropy_before = entropy.mean().item()  # 坍缩前熵
+        entropy_after = self.compute_uncertainty(collapsed_state).mean().item()  # 坍缩后熵
+        if entropy_before > 1e-8:
+            entropy_compression_ratio = entropy_after / entropy_before
+        else:
+            entropy_compression_ratio = 1.0
+
+        # ── 4. POVM 质量 ──
+        povm_violation = self.povm.get_completeness_violation().item()
+
+        # ── 5. 有效测量数 ──
+        # 通过 POVM 权重分布的熵估计有效秩
+        povm_weights = self.povm.get_operators()  # (out_dim,) 正实数
+        weights_prob = povm_weights / (povm_weights.sum().clamp(min=1e-8))  # 归一化为分布
+        log_w = torch.log(weights_prob.clamp(min=1e-8))
+        povm_entropy = -(weights_prob * log_w).sum().item()
+        effective_measurement_rank = float(torch.exp(torch.tensor(povm_entropy)).item())
+
+        return {
+            "early_exit_rate": early_exit_rate,
+            "information_retention": information_retention,
+            "entropy_before": entropy_before,
+            "entropy_after": entropy_after,
+            "entropy_compression_ratio": entropy_compression_ratio,
+            "povm_completeness_violation": povm_violation,
+            "effective_measurement_rank": effective_measurement_rank,
+            "tau_low": tau_low,
+            "tau_high": self.tau_high_val,
+        }
+
     def update_thresholds(self, tau_low: float, tau_high: float):
         """手动更新坍缩阈值。
 
