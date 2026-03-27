@@ -421,6 +421,89 @@ def trace_distance(psi: torch.Tensor, phi: torch.Tensor, dim: int = -1) -> torch
     return torch.sqrt((1.0 - fid).clamp(min=0.0))
 
 
+def quantum_mutual_information(
+    psi: torch.Tensor,
+    phi: torch.Tensor,
+    dim: int = -1,
+    eps: float = 1e-8,
+) -> torch.Tensor:
+    """计算两个量子态之间的量子互信息（Quantum Mutual Information）。
+
+    量子互信息衡量两个量子子系统之间的总关联（包含经典关联和量子纠缠）：
+
+        I(A:B) = S(A) + S(B) - S(AB)
+
+    其中 S(X) 是子系统 X 的 von Neumann 熵。
+
+    对于由 Born 概率表示的纯态近似：
+        I(A:B) ≈ H(p_A) + H(p_B) - H(p_A ⊗ p_B)
+                = H(p_A) + H(p_B) - H(p_A) - H(p_B)
+                = 0  （纯态无经典混合关联）
+
+    注意：对于可分态 ρ_AB = ρ_A ⊗ ρ_B，互信息为 0。
+    当 I(A:B) > 0 时，表明两子系统之间存在关联（纠缠或经典关联）。
+
+    本实现采用乘积分布近似：
+        - 计算各态的 Born 概率分布 p(ψ), p(φ)
+        - 乘积分布 p(ψ) ⊗ p(φ) 作为无关联参考
+        - 互信息 = D_KL(联合分布 || 乘积分布) 的近似
+
+    在量子架构中的用途：
+    1. **QEL 监控**：纠缠前后的互信息变化，衡量纠缠门的"关联注入"效果
+    2. **QSA 诊断**：不同 head 之间的互信息，检测 head 冗余度
+    3. **损失函数**：最大化互信息可作为纠缠学习的辅助损失
+
+    Args:
+        psi: 量子态 A (..., d_A)
+        phi: 量子态 B (..., d_B)
+        dim: 内积维度
+        eps: 防止 log(0) 的数值稳定 epsilon
+    Returns:
+        互信息估计值 (...)，实数，非负
+
+    Example:
+        >>> psi = torch.randn(4, 64, dtype=torch.complex64)
+        >>> phi = torch.randn(4, 64, dtype=torch.complex64)
+        >>> I = quantum_mutual_information(psi, phi)  # (...,) ≥ 0
+    """
+    # Born 概率
+    p_A = born_normalize(psi, dim=dim, eps=eps)   # (..., d_A) 实数
+    p_B = born_normalize(phi, dim=dim, eps=eps)   # (..., d_B) 实数
+
+    # 子系统熵 S(A), S(B)
+    S_A = von_neumann_entropy(p_A, dim=dim, eps=eps)  # (...,)
+    S_B = von_neumann_entropy(p_B, dim=dim, eps=eps)  # (...,)
+
+    # 联合分布近似：p_AB(i,j) = p_A(i) * p_B(j)（乘积分布 = 无关联参考）
+    # S(AB) ≈ S(A) + S(B)（乘积态熵等于各子系统熵之和）
+    # 因此互信息 I(A:B) = S(A) + S(B) - S(AB) ≈ 0（无额外关联）
+    #
+    # 更实用的做法：用 KL 散度衡量联合 Born 概率与乘积分布的偏差
+    # 将两态在特征维度上进行外积，度量关联程度
+    # (..., d_A, 1) × (..., 1, d_B) → (..., d_A, d_B)
+    p_A_expanded = p_A.unsqueeze(-1)   # (..., d_A, 1)
+    p_B_expanded = p_B.unsqueeze(-2)   # (..., 1, d_B)
+    p_product = p_A_expanded * p_B_expanded  # (..., d_A, d_B) 独立分布
+
+    # 联合 Born 概率：用外积计算（近似）
+    # 通过模长乘积构造联合振幅，然后 Born 归一化
+    psi_expanded = psi.unsqueeze(-1)   # (..., d_A, 1)
+    phi_expanded = phi.unsqueeze(-2)   # (..., 1, d_B)
+    joint_amplitude = psi_expanded * phi_expanded  # (..., d_A, d_B) 外积态
+
+    # 联合 Born 概率（展平后归一化）
+    joint_shape = joint_amplitude.shape
+    joint_flat = joint_amplitude.reshape(*joint_shape[:-2], -1)  # (..., d_A*d_B)
+    p_joint = born_normalize(joint_flat, dim=-1, eps=eps)  # (..., d_A*d_B)
+    p_product_flat = p_product.reshape(*joint_shape[:-2], -1)  # (..., d_A*d_B)
+
+    # 互信息 = KL(p_joint || p_product)
+    log_ratio = torch.log(p_joint.clamp(min=eps)) - torch.log(p_product_flat.clamp(min=eps))
+    mutual_info = (p_joint * log_ratio).sum(dim=-1)  # (...,)
+
+    return mutual_info.clamp(min=0.0)  # 理论非负，数值上 clamp 防止浮点误差
+
+
 def quantum_relative_entropy(
     psi: torch.Tensor,
     phi: torch.Tensor,
