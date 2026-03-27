@@ -221,6 +221,140 @@ class QuantumArch(nn.Module):
             "layer_metrics": all_metrics,
         }
 
+    @torch.no_grad()
+    def get_layer_quantum_states(
+        self,
+        x,
+        layers: Optional[list] = None,
+    ) -> Dict[str, Any]:
+        """提取模型各层的复数量子态（用于可视化与机制可解释性研究）。
+
+        逐层前向传播，在指定层保存中间复数隐藏状态。
+        这是量子架构"量子态演化路径"可视化的核心接口。
+
+        典型使用场景：
+        1. **相位演化分析**：观察 token 相位如何随层数变化
+        2. **纠缠热图**：提取各层状态后，用 concurrence/fidelity 构建纠缠矩阵
+        3. **坍缩时序**：追踪 QCI 在哪些层触发了哪些 token 的坍缩
+        4. **注意力-纠缠关联**：对比相同层的 QSA 注意力模式和 QEL 纠缠强度
+
+        Args:
+            x: 输入，格式同 forward() 的 x 参数
+            layers: 要提取状态的层索引列表（None 表示提取所有层）
+                    支持负数索引（如 -1 = 最后一层）
+
+        Returns:
+            dict 包含:
+                - ``input_state``: 嵌入后、第一层前的量子态 (B, N, D) 复数
+                - ``layer_states``: dict[int → Tensor]，指定层输出的量子态
+                - ``output_state``: 最终归一化后的量子态 (B, N, D) 复数
+                - ``layer_metrics``: dict[int → dict]，各层的统计指标
+                - ``state_fidelities``: dict[(i, j) → float]，相邻层量子态的保真度
+                  （度量每层变换的"信息保留率"）
+                - ``state_entropies``: dict[int → float]，各层量子态的平均熵
+
+        Example:
+            >>> model = QuantumArch(vocab_size=1000, dim=256, num_layers=6)
+            >>> result = model.get_layer_quantum_states(
+            ...     {"token_ids": tokens},
+            ...     layers=[0, 2, 4, -1]
+            ... )
+            >>> for layer_idx, state in result["layer_states"].items():
+            ...     print(f"Layer {layer_idx}: state shape = {state.shape}")
+        """
+        from .complex_ops import quantum_fidelity, von_neumann_entropy, born_normalize
+
+        was_training = self.training
+        self.eval()
+
+        try:
+            # 规范化 layers 参数
+            if layers is None:
+                target_layers = list(range(self.num_layers))
+            else:
+                # 支持负数索引
+                target_layers = [
+                    l % self.num_layers if l < 0 else l
+                    for l in layers
+                ]
+            target_set = set(target_layers)
+
+            # ── 输入处理（复制自 forward）──
+            if isinstance(x, dict):
+                if "token_ids" in x:
+                    z = self.embedding(x["token_ids"])
+                    z = self.pos_encoding(z, training=False)
+                elif "inputs" in x:
+                    raw = x["inputs"]
+                    if raw.dtype not in (torch.complex64, torch.complex128):
+                        z = torch.complex(raw, torch.zeros_like(raw))
+                    else:
+                        z = raw
+                    if hasattr(self, "input_proj"):
+                        z = self.input_proj(z)
+                else:
+                    raise ValueError(f"Unexpected input keys: {list(x.keys())}")
+            else:
+                raw = x
+                if raw.dtype not in (torch.complex64, torch.complex128):
+                    z = torch.complex(raw, torch.zeros_like(raw))
+                else:
+                    z = raw
+                if hasattr(self, "input_proj"):
+                    z = self.input_proj(z)
+
+            # 保存输入量子态
+            input_state = z.clone()
+
+            # ── 逐层前向，收集指定层状态 ──
+            layer_states: Dict[int, torch.Tensor] = {}
+            layer_metrics_collected: Dict[int, dict] = {}
+            prev_state = input_state
+
+            for i, block in enumerate(self.blocks):
+                z, block_metrics = block(z, training=False)
+
+                if i in target_set:
+                    layer_states[i] = z.clone()
+                    layer_metrics_collected[i] = block_metrics
+
+            # 最终归一化
+            z_final = self.final_norm(z)
+            output_state = z_final.clone()
+
+            # ── 计算各层量子态的保真度（相邻层对） ──
+            state_fidelities: Dict = {}
+            all_states = [input_state] + [
+                layer_states[i] for i in sorted(layer_states.keys())
+            ] + [output_state]
+
+            for k in range(len(all_states) - 1):
+                s1, s2 = all_states[k], all_states[k + 1]
+                # 每对 (batch, token) 的平均保真度
+                fid = quantum_fidelity(s1, s2, dim=-1).mean().item()
+                state_fidelities[k] = fid
+
+            # ── 计算各层量子态的熵 ──
+            state_entropies: Dict[int, float] = {}
+            for layer_idx, state in layer_states.items():
+                entropy = von_neumann_entropy(
+                    born_normalize(state, dim=-1), dim=-1
+                ).mean().item()
+                state_entropies[layer_idx] = entropy
+
+        finally:
+            if was_training:
+                self.train()
+
+        return {
+            "input_state": input_state,
+            "layer_states": layer_states,
+            "output_state": output_state,
+            "layer_metrics": layer_metrics_collected,
+            "state_fidelities": state_fidelities,
+            "state_entropies": state_entropies,
+        }
+
     def update_parameters(self, **kwargs):
         """更新可调参数（兼容 MockQuantumArch 接口）。"""
         if "qsa_topk_ratio" in kwargs:
