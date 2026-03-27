@@ -363,6 +363,89 @@ class QuantumSuperpositionAttention(nn.Module):
             "topk_mask": topk_mask,               # (B, H, N, N) bool 稀疏掩码
         }
 
+    def multi_head_entropy_summary(
+        self,
+        x: torch.Tensor,
+        causal: bool = False,
+    ) -> Dict[str, torch.Tensor]:
+        """多头注意力熵分布分析（诊断工具）。
+
+        分析所有注意力头的熵分布特征，识别以下异常模式：
+        1. **头崩溃（Head Collapse）**：多个头的注意力模式高度相似（熵差 < ε）
+        2. **均匀化头（Uniform Head）**：熵接近最大值（max_entropy），注意力均匀分散
+        3. **尖锐头（Sharp Head）**：熵接近 0，注意力集中在少数位置（可能退化）
+        4. **头多样性（Head Diversity）**：各头熵的标准差，高多样性 = 各头学到不同特征
+
+        对于 L 层 H 头的量子架构，理想状态是：
+        - 每层不同头关注不同语义层次（熵多样性高）
+        - 同一层相邻头之间互信息低（头独立性好）
+        - 深层头比浅层头具有更集中的注意力（熵随层数降低）
+
+        此方法用于训练时的诊断和超参数调整，不影响梯度计算。
+
+        Args:
+            x: 复数输入 (batch, seq_len, dim)
+            causal: 是否使用因果掩码
+        Returns:
+            dict 包含:
+                - ``per_head_entropy``: 每头的平均注意力熵 (num_heads,) 实数
+                - ``entropy_mean``: 所有头的熵均值（标量）
+                - ``entropy_std``: 所有头的熵标准差（标量，度量头多样性）
+                - ``entropy_min``: 最小头熵（标量，标识最集中的头）
+                - ``entropy_max``: 最大头熵（标量，标识最分散的头）
+                - ``uniform_head_mask``: bool (num_heads,)，True = 均匀化头（熵 > 0.9*max）
+                - ``sharp_head_mask``: bool (num_heads,)，True = 尖锐头（熵 < 0.1*max）
+                - ``max_entropy_ref``: 当前序列长度下的最大可能熵（实数标量）
+                - ``head_diversity_score``: 头多样性分数 ∈ [0,1]（归一化的熵标准差）
+        """
+        import math as _math
+
+        patterns = self.get_attention_patterns(x, causal=causal)
+        # attn_probs: (B, H, N, N) — 实数概率矩阵
+        attn_probs = patterns["attn_probs"]
+        B, H, N, _ = attn_probs.shape
+
+        # 每个查询位置的注意力熵 (B, H, N)
+        entropy_per_query = von_neumann_entropy(attn_probs, dim=-1)  # (B, H, N)
+
+        # 对 batch 和 query 位置取平均 → 每头的代表性熵 (H,)
+        per_head_entropy = entropy_per_query.mean(dim=[0, 2])  # (H,)
+
+        # 统计量
+        entropy_mean = per_head_entropy.mean()
+        entropy_std = per_head_entropy.std() if H > 1 else torch.tensor(0.0)
+        entropy_min = per_head_entropy.min()
+        entropy_max = per_head_entropy.max()
+
+        # 当前序列长度下的最大熵（均匀分布时）
+        max_entropy_ref = _math.log(N) if N > 1 else 0.0
+
+        # 均匀化头：熵超过 90% 最大熵 → 注意力过于分散，缺少选择性
+        uniform_threshold = 0.9 * max_entropy_ref
+        uniform_head_mask = per_head_entropy > uniform_threshold
+
+        # 尖锐头：熵低于 10% 最大熵 → 注意力过于集中，可能退化为固定模式
+        sharp_threshold = 0.1 * max_entropy_ref
+        sharp_head_mask = per_head_entropy < sharp_threshold
+
+        # 头多样性分数 ∈ [0, 1]：归一化的头间熵标准差
+        # max_std ≤ max_entropy_ref / 2（理论最大标准差）
+        max_possible_std = max_entropy_ref / 2.0 if max_entropy_ref > 0 else 1.0
+        head_diversity_score = float(entropy_std.item() / max(max_possible_std, 1e-8))
+        head_diversity_score = min(1.0, head_diversity_score)  # clamp 到 [0, 1]
+
+        return {
+            "per_head_entropy": per_head_entropy,           # (H,) 每头平均熵
+            "entropy_mean": entropy_mean,                   # 标量
+            "entropy_std": entropy_std,                     # 标量（头多样性）
+            "entropy_min": entropy_min,                     # 标量
+            "entropy_max": entropy_max,                     # 标量
+            "uniform_head_mask": uniform_head_mask,         # (H,) bool
+            "sharp_head_mask": sharp_head_mask,             # (H,) bool
+            "max_entropy_ref": max_entropy_ref,             # 最大可能熵
+            "head_diversity_score": head_diversity_score,   # [0,1] 多样性分数
+        }
+
     def extra_repr(self) -> str:
         return (
             f"dim={self.dim}, num_heads={self.num_heads}, "
